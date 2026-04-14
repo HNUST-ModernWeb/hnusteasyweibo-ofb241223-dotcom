@@ -1,24 +1,35 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { Image as ImageIcon, Smile, MapPin, Calendar } from 'lucide-vue-next';
+import { useRouter } from 'vue-router';
+import { Image as ImageIcon, Maximize2 } from 'lucide-vue-next';
 import { postService } from '../api/services';
+import EmojiPicker from '../components/EmojiPicker.vue';
 import PostCard from '../components/PostCard.vue';
 import { useAuth } from '../composables/useAuth';
 import { useToast } from '../composables/useToast';
 import type { Post } from '../types';
 
+const COMPOSE_DRAFT_KEY = 'easyweibo_compose_draft';
+const router = useRouter();
 const posts = ref<Post[]>([]);
 const loading = ref(true);
+const publishing = ref(false);
 const newPostContent = ref('');
-const images = ref<string[]>([]);
+const images = ref<Array<{ file: File; previewUrl: string }>>([]);
 
 const { user, isAuthenticated } = useAuth();
 const { showToast } = useToast();
 
 const loadPosts = async () => {
   loading.value = true;
-  posts.value = await postService.getPosts();
-  loading.value = false;
+  try {
+    posts.value = await postService.getPosts();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '加载帖子失败，请稍后重试', 'error');
+    posts.value = [];
+  } finally {
+    loading.value = false;
+  }
 };
 
 onMounted(() => {
@@ -29,39 +40,44 @@ const handleCreatePost = async () => {
   if (!newPostContent.value.trim() || !user.value) return;
   
   try {
-    await postService.createPost(
-      user.value, 
-      newPostContent.value, 
-      images.value.length > 0 ? images.value : undefined
-    );
+    publishing.value = true;
+    await postService.createPost(newPostContent.value, images.value.map((item) => item.file));
+    window.sessionStorage.removeItem(COMPOSE_DRAFT_KEY);
     newPostContent.value = '';
     images.value = [];
     showToast('发布成功！', 'success');
-    loadPosts();
+    await loadPosts();
   } catch (e) {
-    showToast('发布失败，请重试', 'error');
+    showToast(e instanceof Error ? e.message : '发布失败，请重试', 'error');
+  } finally {
+    publishing.value = false;
   }
 };
 
 const handleImageUpload = (e: Event) => {
   const target = e.target as HTMLInputElement;
-  const file = target.files?.[0];
-  if (file) {
+  Array.from(target.files || []).forEach((file) => {
     const reader = new FileReader();
     reader.onloadend = () => {
-      images.value.push(reader.result as string);
+      images.value.push({
+        file,
+        previewUrl: reader.result as string,
+      });
     };
     reader.readAsDataURL(file);
-  }
+  });
+  target.value = '';
 };
 
-const handleInsertEmoji = () => {
-  newPostContent.value = `${newPostContent.value}${newPostContent.value ? ' ' : ''}😀`;
+const handleInsertEmoji = (emoji: string) => {
+  newPostContent.value = `${newPostContent.value}${newPostContent.value ? ' ' : ''}${emoji}`;
 };
 
-const handlePendingAction = (message: string) => {
-  showToast(message, 'error');
+const openFullscreenEditor = () => {
+  window.sessionStorage.setItem(COMPOSE_DRAFT_KEY, newPostContent.value);
+  router.push('/compose?fullscreen=1');
 };
+
 </script>
 
 <template>
@@ -75,6 +91,16 @@ const handlePendingAction = (message: string) => {
     <div v-if="isAuthenticated" class="p-4 flex gap-4">
       <img :src="user?.avatar" :alt="user?.nickname" class="w-12 h-12 rounded-full object-cover" />
       <div class="flex-1">
+        <div class="mb-3 flex justify-end">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full border border-border px-3 py-2 text-sm font-medium hover:bg-bg-secondary"
+            @click="openFullscreenEditor"
+          >
+            <Maximize2 :size="16" />
+            全屏编辑
+          </button>
+        </div>
         <textarea 
           v-model="newPostContent"
           placeholder="有什么新鲜事？" 
@@ -82,13 +108,13 @@ const handlePendingAction = (message: string) => {
         ></textarea>
         
         <!-- Image Previews -->
-        <div v-if="images.length > 0" class="flex gap-2 mb-4 overflow-x-auto pb-2">
-          <div v-for="(img, i) in images" :key="i" class="relative flex-shrink-0">
-            <img :src="img" class="w-24 h-24 rounded-xl object-cover" />
-            <button 
-              @click="images.splice(i, 1)"
-              class="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-black/70"
-            >
+          <div v-if="images.length > 0" class="flex gap-2 mb-4 overflow-x-auto pb-2">
+            <div v-for="(img, i) in images" :key="i" class="relative flex-shrink-0">
+              <img :src="img.previewUrl" class="w-24 h-24 rounded-xl object-cover" />
+              <button 
+                @click="images.splice(i, 1)"
+                class="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 hover:bg-black/70"
+              >
               ×
             </button>
           </div>
@@ -98,18 +124,16 @@ const handlePendingAction = (message: string) => {
           <div class="flex items-center text-brand">
             <label class="p-2 hover:bg-brand/10 rounded-full cursor-pointer transition-colors">
               <ImageIcon :size="20" />
-              <input type="file" class="hidden" accept="image/*" @change="handleImageUpload" />
+              <input type="file" class="hidden" accept="image/*" multiple @change="handleImageUpload" />
             </label>
-            <button type="button" @click="handleInsertEmoji" class="p-2 hover:bg-brand/10 rounded-full transition-colors"><Smile :size="20" /></button>
-            <button type="button" @click="handlePendingAction('位置功能将在后端接入后开放')" class="p-2 hover:bg-brand/10 rounded-full transition-colors"><MapPin :size="20" /></button>
-            <button type="button" @click="handlePendingAction('定时发布功能开发中')" class="p-2 hover:bg-brand/10 rounded-full transition-colors"><Calendar :size="20" /></button>
+            <EmojiPicker @select="handleInsertEmoji" />
           </div>
           <button 
             @click="handleCreatePost"
-            :disabled="!newPostContent.trim()"
+            :disabled="!newPostContent.trim() || publishing"
             class="bg-brand hover:bg-brand-hover text-bg-primary px-6 py-2 rounded-full font-bold disabled:opacity-50 transition-all active:scale-95"
           >
-            发布
+            {{ publishing ? '发布中...' : '发布' }}
           </button>
         </div>
       </div>

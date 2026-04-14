@@ -3,7 +3,12 @@ export interface User {
   username: string;
   nickname: string;
   avatar: string;
+  coverUrl?: string;
   bio?: string;
+  role: 'ADMIN' | 'USER';
+  status: 'ACTIVE' | 'BANNED';
+  muteStatus: 'NORMAL' | 'MUTED';
+  createdAt: string;
   followersCount: number;
   followingCount: number;
   isFollowing?: boolean;
@@ -15,10 +20,13 @@ export interface Post {
   author: User;
   content: string;
   images?: string[];
+  status: 'ACTIVE' | 'WITHDRAWN' | 'DELETED';
   createdAt: string;
   likesCount: number;
+  repostsCount: number;
   commentsCount: number;
   isLiked?: boolean;
+  isReposted?: boolean;
   isBookmarked?: boolean;
   tags?: string[];
 }
@@ -36,9 +44,12 @@ export interface Comment {
 
 export interface Notification {
   id: string;
-  type: 'like' | 'comment' | 'follow' | 'mention';
+  type: 'like' | 'comment' | 'follow' | 'mention' | 'system';
   fromUser: User;
   postId?: string;
+  message?: string;
+  actionLabel?: string;
+  actionUrl?: string;
   createdAt: string;
   read: boolean;
 }
@@ -47,4 +58,33 @@ export interface Topic {
   id: string;
   name: string;
   postCount: number;
+}
+
+export type ReportCategory = 'spam' | 'abuse' | 'misinformation' | 'copyright' | 'other';
+
+export interface AdminOverview {
+  usersCount: number;
+  postsCount: number;
+  commentsCount: number;
+  openReportsCount: number;
+}
+
+export interface AdminReportPost {
+  id: string;
+  content: string;
+  status: 'ACTIVE' | 'WITHDRAWN' | 'DELETED';
+  createdAt: string;
+  author: User;
+}
+
+export interface AdminReport {
+  id: string;
+  category: ReportCategory;
+  details?: string;
+  status: 'OPEN' | 'RESOLVED';
+  createdAt: string;
+  resolvedAt?: string;
+  reporter: User;
+  resolvedBy?: User;
+  post?: AdminReportPost;
 }

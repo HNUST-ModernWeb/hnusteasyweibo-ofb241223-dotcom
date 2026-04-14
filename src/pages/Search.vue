@@ -1,25 +1,47 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { postService } from '../api/services';
-import { Post } from '../types';
+import { postService, userService } from '../api/services';
+import { Post, User } from '../types';
 import PostCard from '../components/PostCard.vue';
 import { Search as SearchIcon, X } from 'lucide-vue-next';
+import { useToast } from '../composables/useToast';
 
 const route = useRoute();
 const router = useRouter();
 const posts = ref<Post[]>([]);
+const users = ref<User[]>([]);
 const loading = ref(false);
 const inputValue = ref((route.query.q as string) || '');
+const { showToast } = useToast();
 
 const handleSearch = async (query: string) => {
   if (!query) {
     posts.value = [];
+    users.value = [];
     return;
   }
   loading.value = true;
-  posts.value = await postService.searchPosts(query);
-  loading.value = false;
+  try {
+    const normalizedQuery = query.trim();
+    if (normalizedQuery.startsWith('#')) {
+      users.value = [];
+      posts.value = await postService.searchPosts(query);
+    } else {
+      const [matchedPosts, matchedUsers] = await Promise.all([
+        postService.searchPosts(query),
+        userService.searchUsers(query),
+      ]);
+      posts.value = matchedPosts;
+      users.value = matchedUsers;
+    }
+  } catch (error) {
+    posts.value = [];
+    users.value = [];
+    showToast(error instanceof Error ? error.message : '搜索失败，请稍后重试', 'error');
+  } finally {
+    loading.value = false;
+  }
 };
 
 watch(() => route.query.q, (newQuery) => {
@@ -39,6 +61,10 @@ const onSearchSubmit = () => {
 const clearSearch = () => {
   inputValue.value = '';
   router.replace({ path: '/search' });
+};
+
+const refreshSearchResults = () => {
+  handleSearch((route.query.q as string) || '');
 };
 </script>
 
@@ -72,8 +98,29 @@ const clearSearch = () => {
       <div v-else-if="loading" class="flex justify-center p-10">
         <div class="w-8 h-8 border-4 border-brand border-t-transparent rounded-full animate-spin" />
       </div>
-      <template v-else-if="posts.length > 0">
-        <PostCard v-for="post in posts" :key="post.id" :post="post" />
+      <template v-else-if="users.length > 0 || posts.length > 0">
+        <div v-if="users.length" class="border-b border-border">
+          <div class="px-4 py-3 text-sm font-bold text-text-secondary">用户</div>
+          <button
+            v-for="user in users"
+            :key="user.id"
+            type="button"
+            class="w-full px-4 py-3 flex items-center gap-3 hover:bg-bg-secondary transition-colors text-left"
+            @click="router.push(`/profile/${user.username}`)"
+          >
+            <img :src="user.avatar" :alt="user.nickname" class="w-12 h-12 rounded-full object-cover" />
+            <div class="min-w-0">
+              <p class="font-bold truncate">{{ user.nickname }}</p>
+              <p class="text-sm text-text-secondary truncate">@{{ user.username }}</p>
+              <p v-if="user.bio" class="text-sm text-text-secondary truncate mt-0.5">{{ user.bio }}</p>
+            </div>
+          </button>
+        </div>
+
+        <div v-if="posts.length">
+          <div class="px-4 py-3 text-sm font-bold text-text-secondary">帖子</div>
+          <PostCard v-for="post in posts" :key="post.id" :post="post" @update="refreshSearchResults" @deleted="refreshSearchResults" />
+        </div>
       </template>
       <div v-else class="p-10 text-center text-text-secondary">
         <p class="text-xl font-bold text-text-primary mb-2">未找到相关结果</p>

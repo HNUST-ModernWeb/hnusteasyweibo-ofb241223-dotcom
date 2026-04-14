@@ -6,6 +6,7 @@ import { Post, Comment as CommentType } from '../types';
 import PostCard from '../components/PostCard.vue';
 import { ArrowLeft, Send } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
+import { useToast } from '../composables/useToast';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
@@ -17,24 +18,34 @@ const comments = ref<CommentType[]>([]);
 const loading = ref(true);
 const newComment = ref('');
 const { user, isAuthenticated } = useAuth();
+const { showToast } = useToast();
 
 const loadData = async () => {
   loading.value = true;
-  const p = await postService.getPostById(id);
-  if (p) {
-    post.value = p;
-    comments.value = await commentService.getCommentsByPostId(id);
+  try {
+    const p = await postService.getPostById(id);
+    post.value = p || null;
+    comments.value = p ? await commentService.getCommentsByPostId(id) : [];
+  } catch (error) {
+    post.value = null;
+    comments.value = [];
+    showToast(error instanceof Error ? error.message : '加载帖子失败，请稍后重试', 'error');
+  } finally {
+    loading.value = false;
   }
-  loading.value = false;
 };
 
 onMounted(loadData);
 
 const handleAddComment = async () => {
   if (!newComment.value.trim() || !user.value || !post.value) return;
-  await commentService.addComment(post.value.id, user.value, newComment.value);
-  newComment.value = '';
-  loadData();
+  try {
+    await commentService.addComment(post.value.id, newComment.value);
+    newComment.value = '';
+    await loadData();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '评论失败，请稍后重试', 'error');
+  }
 };
 </script>
 
@@ -54,7 +65,7 @@ const handleAddComment = async () => {
       <h1 class="text-xl font-bold">帖子</h1>
     </div>
 
-    <PostCard :post="post" />
+    <PostCard :post="post" @update="loadData" @deleted="router.push('/')" />
 
     <div v-if="isAuthenticated" class="p-4 border-b border-border flex gap-4">
       <img :src="user?.avatar" :alt="user?.nickname" class="w-10 h-10 rounded-full object-cover" />

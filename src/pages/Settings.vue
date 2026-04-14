@@ -3,25 +3,18 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useTheme } from '../composables/useTheme';
 import { useAuth } from '../composables/useAuth';
-import { useToast } from '../composables/useToast';
-import { Moon, Sun, LogOut, User, Shield, Bell, Globe, HelpCircle } from 'lucide-vue-next';
+import { Moon, Sun, LogOut, User, Shield, Bell, Globe, HelpCircle, LayoutDashboard } from 'lucide-vue-next';
 
 const router = useRouter();
 const { theme, toggleTheme } = useTheme();
 const { user, logout, isAuthenticated } = useAuth();
-const { showToast } = useToast();
 
 const openProfileSettings = () => {
   if (user.value) {
     router.push(`/profile/${user.value.username}`);
     return;
   }
-  showToast('请先登录后再查看个人资料', 'error');
   router.push('/login');
-};
-
-const showPendingSetting = (message: string) => {
-  showToast(message, 'error');
 };
 
 const settingsGroups = computed(() => [
@@ -29,7 +22,7 @@ const settingsGroups = computed(() => [
     title: '账号设置',
     items: [
       { icon: User, label: '个人资料', description: '查看个人主页与资料', onClick: openProfileSettings },
-      { icon: Shield, label: '安全与隐私', description: '密码、账号权限', onClick: () => showPendingSetting('安全设置将在后端接入后开放') },
+      { icon: Shield, label: '安全与隐私', description: '修改密码与账号安全', onClick: () => router.push('/settings/security') },
     ],
   },
   {
@@ -42,13 +35,16 @@ const settingsGroups = computed(() => [
         onClick: toggleTheme,
       },
       { icon: Bell, label: '通知设置', description: '管理推送通知', onClick: () => router.push('/notifications') },
-      { icon: Globe, label: '语言', description: '简体中文', onClick: () => showPendingSetting('当前仅支持简体中文') },
+      { icon: Globe, label: '语言', description: '当前仅支持简体中文' },
     ],
   },
   {
     title: '支持',
     items: [
-      { icon: HelpCircle, label: '帮助中心', description: '常见问题与反馈', onClick: () => showPendingSetting('帮助中心功能开发中') },
+      { icon: HelpCircle, label: '帮助中心', description: '常见问题与反馈', onClick: () => router.push('/settings/help') },
+      ...(user.value?.role === 'ADMIN'
+        ? [{ icon: LayoutDashboard, label: '管理员控制台', description: '查看统计与处理举报', onClick: () => router.push('/admin') }]
+        : []),
     ],
   },
 ]);
@@ -71,7 +67,8 @@ const handleLogout = () => {
         <div 
           v-for="item in group.items" 
           :key="item.label" 
-          class="px-4 py-3 flex items-center gap-4 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-colors"
+          class="px-4 py-3 flex items-center gap-4 transition-colors"
+          :class="item.onClick ? 'cursor-pointer hover:bg-black/5 dark:hover:bg-white/5' : 'cursor-default opacity-75'"
           @click="item.onClick?.()"
         >
           <div class="p-2 bg-bg-secondary rounded-full">

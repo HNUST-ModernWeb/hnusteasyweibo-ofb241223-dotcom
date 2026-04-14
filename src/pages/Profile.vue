@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { userService, postService } from '../api/services';
-import { User, Post } from '../types';
+import { userService, postService, commentService, uploadService } from '../api/services';
+import { User, Post, Comment } from '../types';
 import PostCard from '../components/PostCard.vue';
 import { ArrowLeft, Calendar, MapPin, Link as LinkIcon } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
@@ -13,19 +13,56 @@ const router = useRouter();
 const username = route.params.username as string;
 const profileUser = ref<User | null>(null);
 const posts = ref<Post[]>([]);
+const likedPosts = ref<Post[]>([]);
+const repostedPosts = ref<Post[]>([]);
+const replies = ref<Comment[]>([]);
 const loading = ref(true);
-const { user: currentUser, isAuthenticated } = useAuth();
+const { user: currentUser, isAuthenticated, setCurrentUser } = useAuth();
 const { showToast } = useToast();
-const activeTab = ref<'帖子' | '回复' | '媒体' | '喜欢'>('帖子');
+const activeTab = ref<'帖子' | '回复' | '媒体' | '喜欢' | '转发'>('帖子');
+const isEditModalOpen = ref(false);
+const savingProfile = ref(false);
+const editNickname = ref('');
+const editBio = ref('');
+const editAvatar = ref('');
+const editCoverUrl = ref('');
+const editAvatarFile = ref<File | null>(null);
+const editCoverFile = ref<File | null>(null);
+const avatarPreviewUrl = ref('');
+const coverPreviewUrl = ref('');
 
 const loadProfile = async () => {
   loading.value = true;
-  const u = await userService.getUserByUsername(username);
-  if (u) {
-    profileUser.value = u;
-    posts.value = await postService.getPostsByAuthor(u.id);
+  try {
+    const u = await userService.getUserByUsername(username);
+    profileUser.value = u || null;
+    if (u) {
+      const [authored, liked, reposted, authoredReplies] = await Promise.all([
+        postService.getPostsByAuthor(u.id),
+        postService.getLikedPostsByUser(u.id),
+        postService.getRepostedPostsByUser(u.id),
+        commentService.getCommentsByAuthorId(u.id),
+      ]);
+      posts.value = authored;
+      likedPosts.value = liked;
+      repostedPosts.value = reposted;
+      replies.value = authoredReplies;
+    } else {
+      posts.value = [];
+      likedPosts.value = [];
+      repostedPosts.value = [];
+      replies.value = [];
+    }
+  } catch (error) {
+    profileUser.value = null;
+    posts.value = [];
+    likedPosts.value = [];
+    repostedPosts.value = [];
+    replies.value = [];
+    showToast(error instanceof Error ? error.message : '加载个人主页失败，请稍后重试', 'error');
+  } finally {
+    loading.value = false;
   }
-  loading.value = false;
 };
 
 onMounted(loadProfile);
@@ -35,13 +72,15 @@ const filteredPosts = computed(() => {
     case '媒体':
       return posts.value.filter((post) => post.images && post.images.length > 0);
     case '喜欢':
-      return posts.value.filter((post) => post.isLiked);
-    case '回复':
-      return [];
+      return likedPosts.value;
+    case '转发':
+      return repostedPosts.value;
     default:
       return posts.value;
   }
 });
+
+const filteredReplies = computed(() => (activeTab.value === '回复' ? replies.value : []));
 
 const emptyStateText = computed(() => {
   switch (activeTab.value) {
@@ -49,8 +88,10 @@ const emptyStateText = computed(() => {
       return '这个用户还没有发布带图片的内容。';
     case '喜欢':
       return '这个用户还没有点赞任何帖子。';
+    case '转发':
+      return '这个用户还没有转发任何帖子。';
     case '回复':
-      return '回复列表将在评论接口接入后展示。';
+      return '这个用户还没有发布任何回复。';
     default:
       return '这个用户还没有发布任何帖子。';
   }
@@ -62,13 +103,109 @@ const handleFollow = async () => {
     return;
   }
   if (profileUser.value) {
-    await userService.followUser(currentUser.value!.id, profileUser.value.id);
+    await userService.followUser(profileUser.value.id);
     loadProfile();
   }
 };
 
 const handleEditProfile = () => {
-  showToast('编辑资料功能将在后端接入后开放', 'error');
+  if (!profileUser.value) {
+    return;
+  }
+  editNickname.value = profileUser.value.nickname;
+  editBio.value = profileUser.value.bio || '';
+  editAvatar.value = profileUser.value.avatar || '';
+  editCoverUrl.value = profileUser.value.coverUrl || '';
+  avatarPreviewUrl.value = profileUser.value.avatar || '';
+  coverPreviewUrl.value = profileUser.value.coverUrl || '';
+  editAvatarFile.value = null;
+  editCoverFile.value = null;
+  isEditModalOpen.value = true;
+};
+
+const closeEditModal = () => {
+  if (savingProfile.value) {
+    return;
+  }
+  isEditModalOpen.value = false;
+};
+
+const handleSaveProfile = async () => {
+  if (!profileUser.value) {
+    return;
+  }
+
+  const nickname = editNickname.value.trim();
+  const bio = editBio.value.trim();
+
+  if (nickname.length < 2) {
+    showToast('昵称至少 2 个字符', 'error');
+    return;
+  }
+
+  savingProfile.value = true;
+
+  try {
+    let avatar = editAvatar.value.trim() || profileUser.value.avatar;
+    let coverUrl = editCoverUrl.value.trim() || profileUser.value.coverUrl;
+
+    if (editAvatarFile.value) {
+      avatar = await uploadService.uploadImage(editAvatarFile.value);
+    }
+
+    if (editCoverFile.value) {
+      coverUrl = await uploadService.uploadImage(editCoverFile.value);
+    }
+
+    const updatedUser = await userService.updateProfile({
+      nickname,
+      bio,
+      avatar: avatar || undefined,
+      coverUrl: coverUrl || undefined,
+    });
+    profileUser.value = updatedUser;
+    posts.value = posts.value.map((post) => (
+      post.authorId === updatedUser.id ? { ...post, author: updatedUser } : post
+    ));
+    likedPosts.value = likedPosts.value.map((post) => (
+      post.authorId === updatedUser.id ? { ...post, author: updatedUser } : post
+    ));
+    repostedPosts.value = repostedPosts.value.map((post) => (
+      post.authorId === updatedUser.id ? { ...post, author: updatedUser } : post
+    ));
+    replies.value = replies.value.map((reply) => (
+      reply.authorId === updatedUser.id ? { ...reply, author: updatedUser } : reply
+    ));
+    setCurrentUser(updatedUser);
+    isEditModalOpen.value = false;
+    showToast('个人资料已更新', 'success');
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '更新资料失败，请稍后重试', 'error');
+  } finally {
+    savingProfile.value = false;
+  }
+};
+
+const handlePreviewUpload = (event: Event, target: 'avatar' | 'cover') => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    const preview = reader.result as string;
+    if (target === 'avatar') {
+      editAvatarFile.value = file;
+      avatarPreviewUrl.value = preview;
+    } else {
+      editCoverFile.value = file;
+      coverPreviewUrl.value = preview;
+    }
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
 };
 </script>
 
@@ -93,12 +230,19 @@ const handleEditProfile = () => {
 
     <div class="relative">
       <div class="relative h-48 sm:h-60 overflow-hidden border-b border-border bg-bg-secondary">
+        <img
+          v-if="profileUser.coverUrl"
+          :src="profileUser.coverUrl"
+          :alt="`${profileUser.nickname} 的封面图`"
+          class="absolute inset-0 h-full w-full object-cover"
+        />
         <div
           class="absolute inset-0 opacity-70 [background-image:radial-gradient(circle_at_top_left,rgba(0,0,0,0.06),transparent_42%),linear-gradient(to_right,rgba(0,0,0,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.04)_1px,transparent_1px)] [background-size:auto,24px_24px,24px_24px]"
+          :class="{ 'mix-blend-soft-light': profileUser.coverUrl }"
         />
       </div>
       <div class="absolute left-4 -bottom-10 sm:-bottom-12 border-4 border-bg-primary rounded-full overflow-hidden w-24 h-24 sm:w-28 sm:h-28 bg-bg-secondary shadow-sm">
-        <img :src="profileUser.avatar" :alt="profileUser.nickname" class="w-full h-full object-cover" />
+        <img :src="profileUser.avatar" :alt="profileUser.nickname" loading="lazy" class="w-full h-full object-cover" />
       </div>
     </div>
 
@@ -137,7 +281,7 @@ const handleEditProfile = () => {
 
     <div class="mt-4 border-b border-border flex">
       <button
-        v-for="tab in ['帖子', '回复', '媒体', '喜欢']"
+        v-for="tab in ['帖子', '回复', '媒体', '喜欢', '转发']"
         :key="tab"
         type="button"
         @click="activeTab = tab as typeof activeTab.value"
@@ -149,9 +293,115 @@ const handleEditProfile = () => {
     </div>
 
     <div class="divide-y divide-border">
-      <PostCard v-for="post in filteredPosts" :key="post.id" :post="post" />
-      <div v-if="!filteredPosts.length" class="p-8 text-center text-text-secondary">
+      <template v-if="activeTab === '回复'">
+        <div
+          v-for="reply in filteredReplies"
+          :key="reply.id"
+          class="p-4 hover:bg-bg-secondary/60 transition-colors cursor-pointer"
+          @click="router.push(`/post/${reply.postId}`)"
+        >
+          <p class="text-sm text-text-secondary mb-2">回复了帖子 #{{ reply.postId }}</p>
+          <p class="text-[15px] leading-6">{{ reply.content }}</p>
+          <p class="text-xs text-text-secondary mt-3">{{ new Date(reply.createdAt).toLocaleString('zh-CN') }}</p>
+        </div>
+      </template>
+      <PostCard v-for="post in filteredPosts" :key="post.id" :post="post" @update="loadProfile" />
+      <div v-if="activeTab === '回复' ? !filteredReplies.length : !filteredPosts.length" class="p-8 text-center text-text-secondary">
         {{ emptyStateText }}
+      </div>
+    </div>
+
+    <div
+      v-if="isEditModalOpen"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-black/45 px-4"
+      @click.self="closeEditModal"
+    >
+      <div class="w-full max-w-2xl rounded-3xl bg-bg-primary p-6 shadow-2xl">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h3 class="text-xl font-bold">编辑个人资料</h3>
+            <p class="mt-1 text-sm text-text-secondary">修改昵称、简介、头像和封面图。</p>
+          </div>
+          <button
+            type="button"
+            class="rounded-full px-3 py-2 text-sm font-medium text-text-secondary hover:bg-bg-secondary"
+            @click="closeEditModal"
+          >
+            关闭
+          </button>
+        </div>
+
+        <div class="mt-6 space-y-4">
+          <label class="block">
+            <span class="mb-2 block text-sm font-bold">昵称</span>
+            <input
+              v-model.trim="editNickname"
+              type="text"
+              maxlength="32"
+              class="w-full rounded-2xl border border-border bg-bg-primary px-4 py-3 outline-none transition focus:border-text-primary"
+            />
+          </label>
+
+          <label class="block">
+            <span class="mb-2 block text-sm font-bold">简介</span>
+            <textarea
+              v-model="editBio"
+              maxlength="255"
+              rows="4"
+              class="w-full rounded-2xl border border-border bg-bg-primary px-4 py-3 outline-none transition focus:border-text-primary"
+            ></textarea>
+          </label>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="space-y-3">
+              <span class="block text-sm font-bold">头像</span>
+              <div class="flex items-center gap-4">
+                <img :src="avatarPreviewUrl || editAvatar" alt="头像预览" class="h-20 w-20 rounded-full object-cover border border-border" />
+                <label class="inline-flex cursor-pointer items-center rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-bg-secondary">
+                  上传头像
+                  <input type="file" class="hidden" accept="image/*" @change="(event) => handlePreviewUpload(event, 'avatar')" />
+                </label>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <span class="block text-sm font-bold">封面图</span>
+              <div class="space-y-3">
+                <div class="h-24 overflow-hidden rounded-2xl border border-border bg-bg-secondary">
+                  <img
+                    v-if="coverPreviewUrl || editCoverUrl"
+                    :src="coverPreviewUrl || editCoverUrl"
+                    alt="封面预览"
+                    class="h-full w-full object-cover"
+                  />
+                </div>
+                <label class="inline-flex cursor-pointer items-center rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-bg-secondary">
+                  上传封面
+                  <input type="file" class="hidden" accept="image/*" @change="(event) => handlePreviewUpload(event, 'cover')" />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex justify-end gap-3">
+          <button
+            type="button"
+            class="rounded-full border border-border px-5 py-3 font-medium hover:bg-bg-secondary"
+            :disabled="savingProfile"
+            @click="closeEditModal"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            class="rounded-full bg-text-primary px-5 py-3 font-bold text-bg-primary hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="savingProfile"
+            @click="handleSaveProfile"
+          >
+            {{ savingProfile ? '保存中...' : '保存修改' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>

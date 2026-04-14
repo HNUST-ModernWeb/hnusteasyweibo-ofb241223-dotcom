@@ -15,12 +15,26 @@ const { user, isAuthenticated } = useAuth();
 const { showToast } = useToast();
 
 const loadRecommendedUsers = async () => {
-  const users = await userService.getRecommendedUsers();
-  recommended.value = users.filter((candidate) => candidate.id !== user.value?.id);
+  try {
+    const users = await userService.getRecommendedUsers();
+    recommended.value = users.filter((candidate) => candidate.id !== user.value?.id);
+  } catch (error) {
+    recommended.value = [];
+    showToast(error instanceof Error ? error.message : '加载推荐用户失败', 'error');
+  }
+};
+
+const loadTrendingTopics = async () => {
+  try {
+    trending.value = await topicService.getTrendingTopics();
+  } catch (error) {
+    trending.value = [];
+    showToast(error instanceof Error ? error.message : '加载热门话题失败', 'error');
+  }
 };
 
 onMounted(async () => {
-  trending.value = await topicService.getTrendingTopics();
+  await loadTrendingTopics();
   await loadRecommendedUsers();
 });
 
@@ -41,9 +55,11 @@ const handleFollow = async (candidate: User) => {
     return;
   }
 
-  await userService.followUser(user.value.id, candidate.id);
+  await userService.followUser(candidate.id);
   await loadRecommendedUsers();
-  showToast(candidate.isFollowing ? `已关注 @${candidate.username}` : `已取消关注 @${candidate.username}`, 'success');
+
+  const updatedUser = recommended.value.find((item) => item.id === candidate.id);
+  showToast(updatedUser?.isFollowing ? `已关注 @${candidate.username}` : `已取消关注 @${candidate.username}`, 'success');
 };
 </script>
 

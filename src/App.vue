@@ -9,7 +9,7 @@ const { toasts, dismissToast } = useToast();
   <router-view />
   
   <!-- Toast Container -->
-  <div class="fixed bottom-20 md:bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-full max-w-xs px-4 pointer-events-none">
+  <div class="fixed top-20 md:top-6 left-1/2 md:left-auto md:right-6 -translate-x-1/2 md:translate-x-0 z-50 flex flex-col gap-2 w-full max-w-xs px-4 md:px-0 pointer-events-none">
     <transition-group name="toast">
       <div
         v-for="toast in toasts"
@@ -39,10 +39,10 @@ const { toasts, dismissToast } = useToast();
 }
 .toast-enter-from {
   opacity: 0;
-  transform: translateY(20px) scale(0.9);
+  transform: translateY(-16px) scale(0.94);
 }
 .toast-leave-to {
   opacity: 0;
-  transform: scale(0.9);
+  transform: translateY(-8px) scale(0.94);
 }
 </style>

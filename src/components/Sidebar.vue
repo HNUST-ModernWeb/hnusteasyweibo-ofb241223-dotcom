@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { Search, Bell, User, Settings, LogOut, PlusSquare, Moon, Sun, Hash } from 'lucide-vue-next';
+import { Search, Bell, User, Settings, LogOut, PlusSquare, Moon, Sun, Hash, LayoutDashboard } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
+import { useNotifications } from '../composables/useNotifications';
 import { useTheme } from '../composables/useTheme';
 import HomeFilledIcon from './icons/HomeFilledIcon.vue';
 
 const router = useRouter();
 const route = useRoute();
 const { user, logout, isAuthenticated } = useAuth();
+const { unreadCount } = useNotifications();
 const { theme, toggleTheme } = useTheme();
 
 const navItems = computed(() => [
@@ -17,6 +19,7 @@ const navItems = computed(() => [
   { icon: Hash, label: '话题', path: '/topics' },
   { icon: Bell, label: '通知', path: '/notifications' },
   { icon: User, label: '个人主页', path: user.value ? `/profile/${user.value.username}` : '/login' },
+  ...(user.value?.role === 'ADMIN' ? [{ icon: LayoutDashboard, label: '控制台', path: '/admin' }] : []),
   { icon: Settings, label: '设置', path: '/settings' },
 ]);
 
@@ -44,7 +47,15 @@ const handleLogout = () => {
         class="flex items-center gap-4 p-3 rounded-full transition-colors hover:bg-bg-secondary"
         :class="{ 'font-bold': route.path === item.path, 'font-normal': route.path !== item.path }"
       >
-        <component :is="item.icon" :size="26" />
+        <span class="relative inline-flex">
+          <component :is="item.icon" :size="26" />
+          <span
+            v-if="item.path === '/notifications' && unreadCount > 0"
+            class="absolute -right-2 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-text-primary px-1.5 py-0.5 text-[11px] font-bold leading-none text-bg-primary"
+          >
+            {{ unreadCount > 99 ? '99+' : unreadCount }}
+          </span>
+        </span>
         <span class="hidden lg:block text-xl">{{ item.label }}</span>
       </router-link>
 

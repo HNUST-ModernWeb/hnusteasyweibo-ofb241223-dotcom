@@ -2,10 +2,12 @@
 import { useRoute } from 'vue-router';
 import { Search, Bell, User, PlusSquare } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
+import { useNotifications } from '../composables/useNotifications';
 import HomeFilledIcon from './icons/HomeFilledIcon.vue';
 
 const route = useRoute();
 const { user } = useAuth();
+const { unreadCount } = useNotifications();
 </script>
 
 <template>
@@ -35,7 +37,15 @@ const { user } = useAuth();
       <PlusSquare :size="24" />
     </router-link>
     <router-link to="/notifications" class="p-2" :class="route.path === '/notifications' ? 'text-brand' : 'text-text-secondary'">
-      <Bell :size="24" />
+      <span class="relative inline-flex">
+        <Bell :size="24" />
+        <span
+          v-if="unreadCount > 0"
+          class="absolute -right-2 -top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-text-primary px-1 py-0.5 text-[10px] font-bold leading-none text-bg-primary"
+        >
+          {{ unreadCount > 99 ? '99+' : unreadCount }}
+        </span>
+      </span>
     </router-link>
     <router-link :to="user ? `/profile/${user.username}` : '/login'" class="p-2" :class="route.path.startsWith('/profile') ? 'text-brand' : 'text-text-secondary'">
       <User :size="24" />

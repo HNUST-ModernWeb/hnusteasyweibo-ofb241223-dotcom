@@ -1,18 +1,41 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import AnimatedCharacters, { type CharacterConfig } from './AnimatedCharacters.vue';
 
+type LoginPayload = {
+  username: string;
+  password: string;
+  remember: boolean;
+};
+
+type RegisterPayload = {
+  username: string;
+  nickname: string;
+  password: string;
+  confirmPassword: string;
+};
+
+type ResetPayload = {
+  username: string;
+  nickname: string;
+  password: string;
+  confirmPassword: string;
+};
+
 const emit = defineEmits<{
-  submit: [payload: { username: string; password: string; remember: boolean }];
-  register: [];
-  forgotPassword: [];
+  submit: [payload: LoginPayload];
+  register: [payload: RegisterPayload];
+  resetPassword: [payload: ResetPayload];
 }>();
 
+const mode = ref<'login' | 'register' | 'reset'>('login');
+const nickname = ref('');
 const username = ref('admin');
 const password = ref('password123');
+const confirmPassword = ref('');
 const remember = ref(false);
 const showPassword = ref(false);
-const focusedField = ref<'none' | 'email' | 'password' | 'other'>('none');
+const focusedField = ref<'none' | 'nickname' | 'username' | 'password' | 'confirm'>('none');
 const isTyping = ref(false);
 const isLoginError = ref(false);
 const errorTimer = ref<number | null>(null);
@@ -24,44 +47,136 @@ const characterConfig: CharacterConfig = {
   scale: 0.92,
 };
 
+const isRegisterMode = computed(() => mode.value === 'register');
+const isResetMode = computed(() => mode.value === 'reset');
+const heading = computed(() => {
+  if (isRegisterMode.value) {
+    return '创建 HNUST Easy WeiBo 账号';
+  }
+  if (isResetMode.value) {
+    return '重置 HNUST Easy WeiBo 密码';
+  }
+  return '登录到 HNUST Easy WeiBo';
+});
+const subtitle = computed(() => (
+  isRegisterMode.value
+    ? '创建一个校园账号，马上开始发布、评论和关注。'
+    : isResetMode.value
+      ? '输入用户名、昵称和新密码，完成演示版密码重置。'
+      : '使用校园账号进入信息流、通知和个人主页。'
+));
+const submitLabel = computed(() => {
+  if (loading.value) {
+    if (isRegisterMode.value) {
+      return '注册中...';
+    }
+    if (isResetMode.value) {
+      return '重置中...';
+    }
+    return '登录中...';
+  }
+  if (isRegisterMode.value) {
+    return '注册并进入';
+  }
+  if (isResetMode.value) {
+    return '重置密码';
+  }
+  return '登录';
+});
+const switchPrompt = computed(() => (
+  isRegisterMode.value ? '已经有账号？' : isResetMode.value ? '想起密码了？' : '还没有账号？'
+));
+const switchLabel = computed(() => (
+  isRegisterMode.value ? '立即登录' : isResetMode.value ? '返回登录' : '立即注册'
+));
+const switchTarget = computed<'login' | 'register'>(() => (
+  isRegisterMode.value || isResetMode.value ? 'login' : 'register'
+));
+
 function clearBanners() {
   errorMsg.value = '';
   successMsg.value = '';
 }
 
+function resetErrorState() {
+  if (!isLoginError.value) {
+    return;
+  }
+  isLoginError.value = false;
+  if (errorTimer.value) {
+    window.clearTimeout(errorTimer.value);
+    errorTimer.value = null;
+  }
+}
+
 function triggerErrorState() {
   isLoginError.value = true;
-  if (errorTimer.value) window.clearTimeout(errorTimer.value);
+  if (errorTimer.value) {
+    window.clearTimeout(errorTimer.value);
+  }
   errorTimer.value = window.setTimeout(() => {
     isLoginError.value = false;
   }, 2200);
 }
 
+function switchMode(nextMode: 'login' | 'register' | 'reset') {
+  mode.value = nextMode;
+  clearBanners();
+  resetErrorState();
+  loading.value = false;
+  password.value = nextMode === 'login' ? 'password123' : '';
+  confirmPassword.value = '';
+  if (nextMode === 'register' || nextMode === 'reset') {
+    nickname.value = '';
+    username.value = '';
+  } else {
+    username.value = username.value || 'admin';
+  }
+}
+
 function onSubmit() {
   clearBanners();
+  if (isRegisterMode.value) {
+    emit('register', {
+      username: username.value.trim(),
+      nickname: nickname.value.trim(),
+      password: password.value,
+      confirmPassword: confirmPassword.value,
+    });
+    return;
+  }
+
+  if (isResetMode.value) {
+    emit('resetPassword', {
+      username: username.value.trim(),
+      nickname: nickname.value.trim(),
+      password: password.value,
+      confirmPassword: confirmPassword.value,
+    });
+    return;
+  }
+
   emit('submit', {
-    username: username.value,
+    username: username.value.trim(),
     password: password.value,
     remember: remember.value,
   });
 }
 
-watch([username, password], () => {
-  if (errorMsg.value) errorMsg.value = '';
-  if (isLoginError.value) {
-    isLoginError.value = false;
-    if (errorTimer.value) {
-      window.clearTimeout(errorTimer.value);
-      errorTimer.value = null;
-    }
+watch([username, nickname, password, confirmPassword], () => {
+  if (errorMsg.value) {
+    errorMsg.value = '';
   }
+  resetErrorState();
 });
 
 defineExpose({
   setError(message: string) {
     errorMsg.value = message;
     successMsg.value = '';
-    if (message) triggerErrorState();
+    if (message) {
+      triggerErrorState();
+    }
   },
   setLoading(value: boolean) {
     loading.value = value;
@@ -69,7 +184,10 @@ defineExpose({
   setSuccess(message: string) {
     successMsg.value = message;
     errorMsg.value = '';
-    isLoginError.value = false;
+    resetErrorState();
+  },
+  setMode(nextMode: 'login' | 'register' | 'reset') {
+    switchMode(nextMode);
   },
 });
 </script>
@@ -89,9 +207,9 @@ defineExpose({
         <div class="characters-stage">
           <AnimatedCharacters
             :config="characterConfig"
-            :focused-field="focusedField"
+            :focused-field="focusedField === 'password' || focusedField === 'confirm' ? 'password' : focusedField === 'none' ? 'none' : 'email'"
             :is-password-visible="showPassword"
-            :password-length="password.length"
+            :password-length="Math.max(password.length, confirmPassword.length)"
             :is-login-error="isLoginError"
             :is-typing="isTyping"
           />
@@ -115,25 +233,36 @@ defineExpose({
               {{ successMsg }}
             </div>
 
-            <h1>登录到 HNUST Easy WeiBo</h1>
-            <p class="subtitle">使用校园账号进入信息流、通知和个人主页。</p>
+            <h1>{{ heading }}</h1>
+            <p class="subtitle">{{ subtitle }}</p>
+
+            <template v-if="isRegisterMode || isResetMode">
+              <label class="field-label" for="register-nickname">昵称</label>
+              <div class="input-wrap" :class="{ focused: focusedField === 'nickname' }">
+                <input
+                  id="register-nickname"
+                  v-model.trim="nickname"
+                  type="text"
+                  maxlength="32"
+                  placeholder="请输入昵称"
+                  autocomplete="nickname"
+                  @focus="focusedField = 'nickname'; isTyping = true"
+                  @blur="focusedField = 'none'; isTyping = false"
+                />
+              </div>
+            </template>
 
             <label class="field-label" for="login-username">用户名</label>
-            <div class="input-wrap" :class="{ focused: focusedField === 'email' }">
+            <div class="input-wrap" :class="{ focused: focusedField === 'username' }">
               <input
                 id="login-username"
                 v-model.trim="username"
                 type="text"
-                placeholder="admin / johndoe / janedoe"
+                maxlength="24"
+                :placeholder="isRegisterMode ? '3-24 个字符，可使用字母数字下划线' : isResetMode ? '请输入需要重置的用户名' : 'admin / johndoe / janedoe'"
                 autocomplete="username"
-                @focus="
-                  focusedField = 'email';
-                  isTyping = true;
-                "
-                @blur="
-                  focusedField = 'none';
-                  isTyping = false;
-                "
+                @focus="focusedField = 'username'; isTyping = true"
+                @blur="focusedField = 'none'; isTyping = false"
               />
             </div>
 
@@ -143,17 +272,11 @@ defineExpose({
                 id="login-password"
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
-                placeholder="请输入密码"
-                autocomplete="current-password"
-                maxlength="30"
-                @focus="
-                  focusedField = 'password';
-                  isTyping = true;
-                "
-                @blur="
-                  focusedField = 'none';
-                  isTyping = false;
-                "
+                maxlength="64"
+                :placeholder="isRegisterMode || isResetMode ? '至少 6 位密码' : '请输入密码'"
+                :autocomplete="isRegisterMode || isResetMode ? 'new-password' : 'current-password'"
+                @focus="focusedField = 'password'; isTyping = true"
+                @blur="focusedField = 'none'; isTyping = false"
               />
               <button class="eye-btn" type="button" tabindex="-1" @click="showPassword = !showPassword">
                 <svg
@@ -181,15 +304,29 @@ defineExpose({
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path
-                    d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"
-                  />
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
                   <line x1="1" y1="1" x2="23" y2="23" />
                 </svg>
               </button>
             </div>
 
-            <div class="action-row">
+            <template v-if="isRegisterMode || isResetMode">
+              <label class="field-label" for="register-confirm-password">确认密码</label>
+              <div class="input-wrap" :class="{ focused: focusedField === 'confirm' }">
+                <input
+                  id="register-confirm-password"
+                  v-model="confirmPassword"
+                  :type="showPassword ? 'text' : 'password'"
+                  maxlength="64"
+                  placeholder="再次输入密码"
+                  autocomplete="new-password"
+                  @focus="focusedField = 'confirm'; isTyping = true"
+                  @blur="focusedField = 'none'; isTyping = false"
+                />
+              </div>
+            </template>
+
+            <div v-if="!isRegisterMode && !isResetMode" class="action-row">
               <label class="checkbox-wrap">
                 <input v-model="remember" type="checkbox" />
                 <span class="checkmark" :class="{ checked: remember }">
@@ -206,16 +343,22 @@ defineExpose({
                 </span>
                 <span>记住这台设备</span>
               </label>
-              <button class="forgot-link" type="button" @click="emit('forgotPassword')">忘记密码？</button>
+              <button class="forgot-link" type="button" @click="switchMode('reset')">忘记密码？</button>
             </div>
 
+            <p v-else class="register-hint">
+              {{ isRegisterMode ? '注册成功后会自动登录并进入首页。' : '重置成功后可直接返回登录页使用新密码登录。' }}
+            </p>
+
             <button class="login-btn" type="button" :disabled="loading" @click="onSubmit">
-              {{ loading ? '登录中...' : '登录' }}
+              {{ submitLabel }}
             </button>
 
             <p class="signup-row">
-              还没有账号？
-              <button class="signup-link" type="button" @click="emit('register')">立即注册</button>
+              {{ switchPrompt }}
+              <button class="signup-link" type="button" @click="switchMode(switchTarget)">
+                {{ switchLabel }}
+              </button>
             </p>
           </div>
         </div>
@@ -458,12 +601,19 @@ h1 {
   background: #171717;
 }
 
-.forgot-link {
+.forgot-link,
+.signup-link {
   border: none;
   background: none;
   color: #171717;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+}
+
+.register-hint {
+  margin-bottom: 26px;
+  font-size: 0.95rem;
+  color: #737373;
 }
 
 .login-btn {
@@ -493,14 +643,6 @@ h1 {
   font-size: 1rem;
   color: #737373;
   text-align: center;
-}
-
-.signup-link {
-  border: none;
-  background: none;
-  color: #171717;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 @keyframes form-reveal {
@@ -573,7 +715,8 @@ h1 {
     font-size: 1rem;
   }
 
-  .action-row {
+  .action-row,
+  .register-hint {
     font-size: 0.92rem;
   }
 
