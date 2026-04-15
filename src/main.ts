@@ -9,6 +9,13 @@ const bootstrap = async () => {
 
   const app = createApp(App);
   app.use(router);
+  await router.isReady();
+
+  const title = typeof router.currentRoute.value.meta.title === 'string'
+    ? router.currentRoute.value.meta.title
+    : 'Easy WeiBo';
+  document.title = title.includes('Easy WeiBo') ? title : `${title} / Easy WeiBo`;
+
   app.mount('#app');
 };
 

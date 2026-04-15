@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { useToast } from './composables/useToast';
 import { CheckCircle2, AlertCircle, X } from 'lucide-vue-next';
+import AiChatPanel from './components/ai/AiChatPanel.vue';
 
 const { toasts, dismissToast } = useToast();
 </script>
 
 <template>
   <router-view />
+  <AiChatPanel />
   
   <!-- Toast Container -->
   <div class="fixed top-20 md:top-6 left-1/2 md:left-auto md:right-6 -translate-x-1/2 md:translate-x-0 z-50 flex flex-col gap-2 w-full max-w-xs px-4 md:px-0 pointer-events-none">

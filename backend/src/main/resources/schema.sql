@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS ai_messages;
+DROP TABLE IF EXISTS ai_conversations;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS reports;
 DROP TABLE IF EXISTS hidden_posts;
@@ -134,4 +136,23 @@ CREATE TABLE notifications (
     CONSTRAINT fk_notifications_recipient FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_notifications_actor FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_notifications_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE ai_conversations (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_conversations_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE ai_messages (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    conversation_id BIGINT NOT NULL,
+    role VARCHAR(16) NOT NULL,
+    content TEXT NOT NULL,
+    model VARCHAR(64) NOT NULL DEFAULT 'gemini-2.5-flash-lite',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_messages_conversation FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE
 );

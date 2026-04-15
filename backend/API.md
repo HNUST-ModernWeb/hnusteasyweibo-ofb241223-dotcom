@@ -250,6 +250,52 @@
 - 文件保存在本地 `uploads/`
 - 数据库只保存 URL，不直接保存图片二进制
 
+## AI 对话
+
+仅登录用户可访问。聊天记录按当前用户账号持久化保存。
+
+### GET `/ai/conversations`
+
+获取当前用户的 AI 会话列表。
+
+### POST `/ai/conversations`
+
+新建一个空白会话，默认标题为“新对话”。
+
+### GET `/ai/conversations/{id}`
+
+获取指定会话及其全部消息。
+
+### POST `/ai/conversations/{id}/messages/stream`
+
+向指定会话发送一条用户消息，并以 `text/event-stream` 形式流式返回 Gemini 输出。
+
+请求：
+
+```json
+{
+  "message": "用一句话介绍一下 HNUST Easy WeiBo",
+  "model": "gemini-2.5-flash"
+}
+```
+
+返回事件类型：
+- `delta`
+- `done`
+- `error`
+
+### POST `/ai/conversations/{id}/retry`
+
+重新生成当前会话的上一条助手回复，返回格式同样为流式 `text/event-stream`。后端会复用上一轮用户消息原本使用的模型。
+
+开发环境说明：
+- 支持模型：
+  - `gemini-2.5-flash-lite`
+  - `gemini-2.5-flash`
+  - `gemini-2.5-pro`
+- 密钥从后端环境变量 `GEMINI_API_KEY` 读取
+- 如果未配置密钥，接口会返回 `AI 服务未配置，请先设置 GEMINI_API_KEY`
+
 ## 管理员
 
 仅 `role = ADMIN` 可访问。

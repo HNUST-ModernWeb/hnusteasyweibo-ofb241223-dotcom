@@ -27,3 +27,6 @@ app:
     secret: ${JWT_SECRET:change-this-dev-secret-change-this-dev-secret}
     expire-hours: 72
   upload-dir: uploads
+  gemini:
+    api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL:gemini-2.5-flash-lite}

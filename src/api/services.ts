@@ -1,5 +1,5 @@
-import type { AdminOverview, AdminReport, Comment, Notification, Post, ReportCategory, Topic, User } from '../types';
-import { apiRequest, getAuthToken, normalizeAssetUrl, setAuthToken } from './http';
+import type { AdminOverview, AdminReport, AiConversation, AiMessage, AiModelId, Comment, Notification, Post, ReportCategory, Topic, User } from '../types';
+import { API_ORIGIN, apiRequest, getAuthToken, normalizeAssetUrl, setAuthToken } from './http';
 
 type ApiUser = {
   id: string;
@@ -50,6 +50,16 @@ type LoginResult = {
   user: ApiUser;
 };
 
+type ApiAiConversation = AiConversation;
+type ApiAiMessage = AiMessage;
+type ApiAiConversationDetail = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ApiAiMessage[];
+};
+
 type ApiAdminReport = {
   id: string;
   category: ReportCategory;
@@ -98,6 +108,92 @@ const clearCacheByPrefix = (prefix: string) => {
   for (const key of cacheStore.keys()) {
     if (key.startsWith(prefix)) {
       cacheStore.delete(key);
+    }
+  }
+};
+
+const parseSsePayload = (rawEvent: string) => rawEvent
+  .split('\n')
+  .filter((line) => line.startsWith('data:'))
+  .map((line) => line.slice(5).trim())
+  .join('');
+
+const streamApiRequest = async (
+  path: string,
+  body: unknown,
+  handlers: {
+    onDelta: (text: string) => void;
+    onDone?: () => void;
+    onError?: (message: string) => void;
+  },
+) => {
+  const token = getAuthToken();
+  if (!token) {
+    throw new Error('请先登录');
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_ORIGIN}/api${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new Error(`无法连接后端，请确认 Spring Boot 正在 ${API_ORIGIN} 运行`);
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    let message = 'AI 请求失败，请稍后重试';
+    try {
+      const payload = text ? JSON.parse(text) : null;
+      message = payload?.message || message;
+    } catch {
+      // Ignore JSON parse errors and fall back to the default message.
+    }
+    throw new Error(message);
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('AI 响应流不可用，请稍后重试');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+
+    const events = buffer.split('\n\n');
+    buffer = events.pop() || '';
+
+    for (const event of events) {
+      const payloadText = parseSsePayload(event);
+      if (!payloadText) {
+        continue;
+      }
+
+      const payload = JSON.parse(payloadText) as { type: 'delta' | 'done' | 'error'; text?: string; message?: string };
+      if (payload.type === 'delta' && payload.text) {
+        handlers.onDelta(payload.text);
+      } else if (payload.type === 'error') {
+        const message = payload.message || 'AI 请求失败，请稍后重试';
+        handlers.onError?.(message);
+        throw new Error(message);
+      } else if (payload.type === 'done') {
+        handlers.onDone?.();
+      }
+    }
+
+    if (done) {
+      break;
     }
   }
 };
@@ -668,6 +764,44 @@ export const adminService = {
       'required',
     );
     clearCacheByPrefix('admin:recent-posts');
+  },
+};
+
+export const aiService = {
+  async getConversations(): Promise<AiConversation[]> {
+    return apiRequest<ApiAiConversation[]>('/ai/conversations', { method: 'GET' }, 'required');
+  },
+
+  async createConversation(): Promise<ApiAiConversationDetail> {
+    return apiRequest<ApiAiConversationDetail>('/ai/conversations', { method: 'POST' }, 'required');
+  },
+
+  async getConversation(id: string): Promise<ApiAiConversationDetail> {
+    return apiRequest<ApiAiConversationDetail>(`/ai/conversations/${id}`, { method: 'GET' }, 'required');
+  },
+
+  async streamMessage(
+    id: string,
+    message: string,
+    model: AiModelId,
+    handlers: {
+      onDelta: (text: string) => void;
+      onDone?: () => void;
+      onError?: (message: string) => void;
+    },
+  ) {
+    return streamApiRequest(`/ai/conversations/${id}/messages/stream`, { message, model }, handlers);
+  },
+
+  async retryConversation(
+    id: string,
+    handlers: {
+      onDelta: (text: string) => void;
+      onDone?: () => void;
+      onError?: (message: string) => void;
+    },
+  ) {
+    return streamApiRequest(`/ai/conversations/${id}/retry`, undefined, handlers);
   },
 };
 

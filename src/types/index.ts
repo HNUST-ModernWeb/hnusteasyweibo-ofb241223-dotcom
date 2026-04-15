@@ -88,3 +88,24 @@ export interface AdminReport {
   resolvedBy?: User;
   post?: AdminReportPost;
 }
+
+export interface AiConversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  preview: string;
+}
+
+export type AiModelId =
+  | 'gemini-2.5-flash-lite'
+  | 'gemini-2.5-flash'
+  | 'gemini-2.5-pro';
+
+export interface AiMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt: string;
+  model: AiModelId;
+}
