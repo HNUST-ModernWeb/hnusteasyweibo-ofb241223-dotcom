@@ -56,14 +56,14 @@ public class PostService {
     }
 
     public PostResponse getById(Long id, Long viewerId) {
-        PostEntity post = postMapper.findById(id);
-        if (post == null) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "帖子不存在");
-        }
-        if (!isVisibleToViewer(post, viewerId)) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "帖子不存在");
-        }
+        PostEntity post = requireVisiblePost(id, viewerId);
         return toResponse(post, viewerId);
+    }
+
+    public PostResponse getDetailById(Long id, Long viewerId) {
+        requireVisiblePost(id, viewerId);
+        postMapper.incrementViewCount(id);
+        return toResponse(postMapper.findById(id), viewerId);
     }
 
     public List<PostResponse> getByAuthor(Long authorId, Long viewerId) {
@@ -100,6 +100,7 @@ public class PostService {
         post.setLikesCount(0);
         post.setRepostsCount(0);
         post.setCommentsCount(0);
+        post.setViewsCount(0);
         post.setCreatedAt(java.time.LocalDateTime.now());
         postMapper.insert(post);
 
@@ -306,6 +307,10 @@ public class PostService {
         return postMapper.countAll();
     }
 
+    public long countTotalViews() {
+        return postMapper.countTotalViews();
+    }
+
     public List<PostResponse> getRecentPosts(int limit) {
         return postMapper.findRecent(limit).stream().map(post -> toResponse(post, null)).toList();
     }
@@ -336,11 +341,20 @@ public class PostService {
             post.getLikesCount(),
             post.getRepostsCount(),
             post.getCommentsCount(),
+            post.getViewsCount(),
             isLiked,
             isReposted,
             isBookmarked,
             extractTags(post.getContent())
         );
+    }
+
+    private PostEntity requireVisiblePost(Long id, Long viewerId) {
+        PostEntity post = postMapper.findById(id);
+        if (post == null || !isVisibleToViewer(post, viewerId)) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "帖子不存在");
+        }
+        return post;
     }
 
     private List<String> extractTags(String content) {

@@ -1,5 +1,9 @@
 # API 文档
 
+在线文档：
+- Swagger UI：`http://localhost:8080/swagger-ui/index.html`
+- OpenAPI JSON：`http://localhost:8080/v3/api-docs`
+
 基础地址：`http://localhost:8080/api`
 
 认证方式：
@@ -21,6 +25,12 @@
 
 ### 帖子状态
 - `status`: `ACTIVE | WITHDRAWN | DELETED`
+
+### 帖子统计字段
+- `likesCount`
+- `repostsCount`
+- `commentsCount`
+- `viewsCount`
 
 ### 通知类型
 - `like`
@@ -144,7 +154,7 @@
 
 ### GET `/posts/{id}`
 
-帖子详情。
+帖子详情。每次成功打开详情页时，后端会为该帖子增加一次浏览量。
 
 ### POST `/posts`
 
@@ -302,7 +312,7 @@
 
 ### GET `/admin/overview`
 
-获取后台统计卡片数据。
+获取后台统计卡片数据，包括总浏览量。
 
 ### GET `/admin/users`
 

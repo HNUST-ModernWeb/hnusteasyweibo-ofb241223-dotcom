@@ -80,7 +80,7 @@ public interface PostMapper {
     @Select("SELECT * FROM posts WHERE LOWER(content) LIKE CONCAT('%#', LOWER(#{tag}), '%') ORDER BY created_at DESC")
     List<PostEntity> findByTag(String tag);
 
-    @Insert("INSERT INTO posts (author_id, content, status, likes_count, reposts_count, comments_count, created_at) VALUES (#{authorId}, #{content}, #{status}, #{likesCount}, #{repostsCount}, #{commentsCount}, #{createdAt})")
+    @Insert("INSERT INTO posts (author_id, content, status, likes_count, reposts_count, comments_count, views_count, created_at) VALUES (#{authorId}, #{content}, #{status}, #{likesCount}, #{repostsCount}, #{commentsCount}, #{viewsCount}, #{createdAt})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     void insert(PostEntity post);
 
@@ -98,6 +98,9 @@ public interface PostMapper {
 
     @Select("SELECT COUNT(*) FROM posts")
     int countAll();
+
+    @Select("SELECT COALESCE(SUM(views_count), 0) FROM posts")
+    long countTotalViews();
 
     @Select("SELECT COUNT(*) > 0 FROM post_likes WHERE post_id = #{postId} AND user_id = #{userId}")
     boolean existsLike(@Param("postId") Long postId, @Param("userId") Long userId);
@@ -143,6 +146,9 @@ public interface PostMapper {
 
     @Update("UPDATE posts SET comments_count = GREATEST(comments_count - 1, 0) WHERE id = #{postId}")
     void decrementCommentCount(Long postId);
+
+    @Update("UPDATE posts SET views_count = views_count + 1 WHERE id = #{postId}")
+    void incrementViewCount(Long postId);
 
     @Select("SELECT COUNT(*) > 0 FROM hidden_posts WHERE post_id = #{postId} AND user_id = #{userId}")
     boolean existsHidden(@Param("postId") Long postId, @Param("userId") Long userId);

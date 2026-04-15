@@ -50,7 +50,8 @@ public class AdminService {
             userService.countUsers(),
             postService.countPosts(),
             commentMapper.countAll(),
-            reportMapper.countOpen()
+            reportMapper.countOpen(),
+            postService.countTotalViews()
         );
     }
 

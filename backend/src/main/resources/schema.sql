@@ -34,6 +34,7 @@ CREATE TABLE posts (
     likes_count INT NOT NULL DEFAULT 0,
     reposts_count INT NOT NULL DEFAULT 0,
     comments_count INT NOT NULL DEFAULT 0,
+    views_count INT NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_posts_author FOREIGN KEY (author_id) REFERENCES users(id)
 );

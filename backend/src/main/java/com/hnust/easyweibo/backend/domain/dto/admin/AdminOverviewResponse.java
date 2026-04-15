@@ -4,6 +4,7 @@ public record AdminOverviewResponse(
     Integer usersCount,
     Integer postsCount,
     Integer commentsCount,
-    Integer openReportsCount
+    Integer openReportsCount,
+    Long viewsCount
 ) {
 }

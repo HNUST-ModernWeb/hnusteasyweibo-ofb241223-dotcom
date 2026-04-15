@@ -31,15 +31,20 @@ const handleLogout = () => {
 
 <template>
   <div class="flex flex-col h-full py-4 px-2 lg:px-4">
-    <div class="mb-8 px-2">
-      <img
-        src="/favicon.svg"
-        alt="HNUST logo"
-        class="w-10 h-10 object-contain"
-      />
+    <div class="mb-8 px-1 lg:px-2">
+      <div class="flex items-center gap-3">
+        <img
+          src="/favicon.svg"
+          alt="HNUST logo"
+          class="w-10 h-10 object-contain shrink-0"
+        />
+        <span class="hidden lg:block text-2xl font-bold tracking-tight text-text-primary">
+          Easy WeiBo
+        </span>
+      </div>
     </div>
 
-    <nav class="flex-1 space-y-2">
+    <nav class="space-y-2">
       <router-link
         v-for="item in navItems"
         :key="item.path"
@@ -69,7 +74,7 @@ const handleLogout = () => {
       </button>
     </nav>
 
-    <div v-if="isAuthenticated" class="mt-auto space-y-4">
+    <div v-if="isAuthenticated" class="mt-6">
       <button 
         @click="router.push('/compose')"
         class="w-full bg-brand hover:bg-brand-hover text-bg-primary rounded-full p-3 lg:py-3 lg:px-6 flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg"
@@ -77,6 +82,11 @@ const handleLogout = () => {
         <PlusSquare :size="24" />
         <span class="hidden lg:block font-bold text-lg">发布</span>
       </button>
+    </div>
+
+    <div class="flex-1" />
+
+    <div v-if="isAuthenticated" class="space-y-4">
 
       <div class="flex items-center gap-3 p-3 rounded-full hover:bg-bg-secondary cursor-pointer group relative">
         <img :src="user?.avatar" :alt="user?.nickname" class="w-10 h-10 rounded-full object-cover" />

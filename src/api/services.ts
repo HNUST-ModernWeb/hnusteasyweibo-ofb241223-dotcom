@@ -28,6 +28,7 @@ type ApiPost = {
   likesCount: number;
   repostsCount: number;
   commentsCount: number;
+  viewsCount: number;
   isLiked?: boolean;
   isReposted?: boolean;
   isBookmarked?: boolean;

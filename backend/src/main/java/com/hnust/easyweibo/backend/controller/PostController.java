@@ -45,7 +45,7 @@ public class PostController {
         @RequestHeader(value = "Authorization", required = false) String authorization
     ) {
         Long viewerId = authorization == null ? null : authService.requireUserId(authorization);
-        return postService.getById(id, viewerId);
+        return postService.getDetailById(id, viewerId);
     }
 
     @PostMapping("/posts")

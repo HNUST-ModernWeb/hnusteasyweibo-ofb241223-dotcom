@@ -10,6 +10,7 @@ public class PostEntity {
     private Integer likesCount;
     private Integer repostsCount;
     private Integer commentsCount;
+    private Integer viewsCount;
     private LocalDateTime createdAt;
 
     public Long getId() {
@@ -66,6 +67,14 @@ public class PostEntity {
 
     public void setRepostsCount(Integer repostsCount) {
         this.repostsCount = repostsCount;
+    }
+
+    public Integer getViewsCount() {
+        return viewsCount;
+    }
+
+    public void setViewsCount(Integer viewsCount) {
+        this.viewsCount = viewsCount;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -13,6 +13,7 @@ const recommended = ref<User[]>([]);
 const searchQuery = ref('');
 const { user, isAuthenticated } = useAuth();
 const { showToast } = useToast();
+const footerLinks = ['服务条款', '隐私政策', 'Cookie 政策', '无障碍', '广告信息', '更多…', '© 2026 HNUST Easy WeiBo'];
 
 const loadRecommendedUsers = async () => {
   try {
@@ -132,11 +133,19 @@ const handleFollow = async (candidate: User) => {
     </div>
 
     <!-- Footer Links -->
-    <div class="px-4 text-text-secondary text-xs space-x-2">
-      <span>服务条款</span>
-      <span>隐私政策</span>
-      <span>Cookie 政策</span>
-      <span>© 2026 HNUST Easy WeiBo</span>
+    <div class="px-4 pb-2 text-text-secondary text-[13px] leading-7">
+      <div class="flex flex-wrap items-center gap-x-3">
+        <template v-for="(item, index) in footerLinks" :key="item">
+          <span class="hover:text-text-primary transition-colors cursor-default">{{ item }}</span>
+          <span
+            v-if="index < footerLinks.length - 1"
+            class="text-text-secondary/60"
+            aria-hidden="true"
+          >
+            |
+          </span>
+        </template>
+      </div>
     </div>
   </div>
 </template>

@@ -15,6 +15,7 @@ public record PostResponse(
     Integer likesCount,
     Integer repostsCount,
     Integer commentsCount,
+    Integer viewsCount,
     Boolean isLiked,
     Boolean isReposted,
     Boolean isBookmarked,

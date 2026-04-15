@@ -141,6 +141,13 @@ const cardItems = computed(() => [
     helper: '优先处理开放中的举报',
     icon: ShieldAlert,
   },
+  {
+    key: 'posts' as const,
+    label: '总浏览量',
+    value: overview.value?.viewsCount ?? 0,
+    helper: '查看高曝光内容表现',
+    icon: FileText,
+  },
 ]);
 
 const loadOverview = async () => {
@@ -273,6 +280,14 @@ const formatTime = (value?: string) => {
 const postExcerpt = (content: string, limit = 120) => (
   content.length <= limit ? content : `${content.slice(0, limit)}...`
 );
+
+const formatMetric = (value: number) => {
+  if (value >= 1000) {
+    const compact = (value / 1000).toFixed(value >= 10000 ? 0 : 1).replace(/\.0$/, '');
+    return `${compact}K`;
+  }
+  return String(value);
+};
 
 const statusBadgeClass = (status: string) => {
   switch (status) {
@@ -411,7 +426,7 @@ watch(
       </div>
 
       <template v-else>
-        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <button
             v-for="card in cardItems"
             :key="card.key"
@@ -422,7 +437,7 @@ watch(
             <div class="flex items-start justify-between gap-4">
               <div>
                 <p class="text-sm font-medium text-text-secondary">{{ card.label }}</p>
-                <p class="mt-3 text-4xl font-black tracking-tight">{{ card.value }}</p>
+                <p class="mt-3 text-4xl font-black tracking-tight">{{ formatMetric(card.value) }}</p>
                 <p class="mt-3 text-sm text-text-secondary">{{ card.helper }}</p>
               </div>
               <div class="rounded-2xl bg-bg-secondary p-3">
@@ -467,7 +482,9 @@ watch(
                       </span>
                     </div>
                     <p class="mt-2 break-words text-sm leading-6">{{ postExcerpt(post.content, 110) }}</p>
-                    <p class="mt-3 text-xs text-text-secondary">{{ formatTime(post.createdAt) }}</p>
+                    <p class="mt-3 text-xs text-text-secondary">
+                      {{ formatTime(post.createdAt) }} · {{ formatMetric(post.viewsCount) }} 浏览
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -694,7 +711,7 @@ watch(
                     </div>
                     <p class="mt-2 break-words text-sm leading-6">{{ postExcerpt(post.content, 160) }}</p>
                     <p class="mt-3 text-xs text-text-secondary">
-                      {{ formatTime(post.createdAt) }} · {{ post.likesCount }} 赞 · {{ post.commentsCount }} 评论 · {{ post.repostsCount }} 转发
+                      {{ formatTime(post.createdAt) }} · {{ formatMetric(post.viewsCount) }} 浏览 · {{ formatMetric(post.likesCount) }} 赞 · {{ formatMetric(post.commentsCount) }} 评论 · {{ formatMetric(post.repostsCount) }} 转发
                     </p>
                   </div>
                   <div class="flex flex-wrap gap-2">

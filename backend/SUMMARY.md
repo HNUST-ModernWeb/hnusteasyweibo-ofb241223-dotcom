@@ -47,11 +47,12 @@
 ## 当前补充文档
 
 - 接口文档见 [API.md](./API.md)
+- 在线接口页：`http://localhost:8080/swagger-ui/index.html`
+- OpenAPI JSON：`http://localhost:8080/v3/api-docs`
+- 标准启动入口：`./mvnw spring-boot:run`
 
 ## 仍属于课程版而非生产版的部分
 
 - 还没有自动化测试体系
 - 还没有数据库迁移工具（如 Flyway）
-- 还没有 Swagger UI 页面
 - 还没有 WebSocket 实时推送
-- 还没有 Maven Wrapper

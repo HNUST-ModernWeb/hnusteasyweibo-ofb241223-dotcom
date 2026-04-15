@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Bookmark, Heart, MessageCircle, MoreHorizontal, PencilLine, Repeat2, Share2, ShieldAlert, Trash2, EyeOff } from 'lucide-vue-next';
+import { BarChart3, Bookmark, Heart, MessageCircle, MoreHorizontal, PencilLine, Repeat2, Share2, ShieldAlert, Trash2, EyeOff } from 'lucide-vue-next';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { postService } from '../api/services';
@@ -64,6 +64,14 @@ const isAuthor = computed(() => user.value?.id === props.post.authorId);
 const formattedTime = computed(() => (
   formatDistanceToNow(new Date(props.post.createdAt), { addSuffix: true, locale: zhCN })
 ));
+
+const formatMetric = (value: number) => {
+  if (value >= 1000) {
+    const compact = (value / 1000).toFixed(value >= 10000 ? 0 : 1).replace(/\.0$/, '');
+    return `${compact}K`;
+  }
+  return String(value);
+};
 
 const contentSegments = computed<ContentSegment[]>(() => {
   const source = props.post.content || '';
@@ -363,55 +371,74 @@ const handleSubmitReport = async () => {
           />
         </div>
 
-        <div class="mt-3 flex max-w-md items-center justify-between text-text-secondary">
-          <button
-            class="group flex items-center gap-2 transition-colors hover:text-brand"
-            @click.stop="router.push(`/post/${post.id}#comments`)"
-          >
-            <div class="rounded-full p-2 transition-colors group-hover:bg-brand/10">
-              <MessageCircle :size="18" />
-            </div>
-            <span class="text-sm">{{ post.commentsCount }}</span>
-          </button>
+        <div class="mt-3 flex items-center justify-between text-text-secondary">
+          <div class="grid flex-1 grid-cols-4 gap-1 sm:max-w-[500px]">
+            <button
+              class="group inline-flex items-center gap-1.5 rounded-full pr-3 text-[15px] transition-colors hover:text-text-primary"
+              @click.stop="router.push(`/post/${post.id}#comments`)"
+            >
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors group-hover:bg-black/5 dark:group-hover:bg-white/10">
+                <MessageCircle :size="20" stroke-width="1.9" />
+              </span>
+              <span>{{ formatMetric(post.commentsCount) }}</span>
+            </button>
 
-          <button
-            type="button"
-            class="group flex items-center gap-2 transition-colors"
-            :class="isReposted ? 'text-brand' : 'hover:text-brand'"
-            @click="handleRepost"
-          >
-            <div class="rounded-full p-2 transition-colors group-hover:bg-brand/10" :class="isReposted ? 'text-brand' : ''">
-              <Repeat2 :size="18" />
-            </div>
-            <span class="text-sm">{{ repostsCount }}</span>
-          </button>
+            <button
+              type="button"
+              class="group inline-flex items-center gap-1.5 rounded-full pr-3 text-[15px] transition-colors"
+              :class="isReposted ? 'text-text-primary' : 'hover:text-text-primary'"
+              @click="handleRepost"
+            >
+              <span
+                class="inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors group-hover:bg-black/5 dark:group-hover:bg-white/10"
+              >
+                <Repeat2 :size="20" stroke-width="1.9" />
+              </span>
+              <span>{{ formatMetric(repostsCount) }}</span>
+            </button>
 
-          <button
-            class="group flex items-center gap-2 transition-colors"
-            :class="isLiked ? 'text-brand' : 'hover:text-brand'"
-            @click="handleLike"
-          >
-            <div class="rounded-full p-2 transition-colors group-hover:bg-brand/10" :class="isLiked ? 'text-brand' : ''">
-              <Heart :size="18" :fill="isLiked ? 'currentColor' : 'none'" />
-            </div>
-            <span class="text-sm">{{ likesCount }}</span>
-          </button>
+            <button
+              class="group inline-flex items-center gap-1.5 rounded-full pr-3 text-[15px] transition-colors"
+              :class="isLiked ? 'text-text-primary' : 'hover:text-text-primary'"
+              @click="handleLike"
+            >
+              <span
+                class="inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors group-hover:bg-black/5 dark:group-hover:bg-white/10"
+              >
+                <Heart :size="20" stroke-width="1.9" :fill="isLiked ? 'currentColor' : 'none'" />
+              </span>
+              <span>{{ formatMetric(likesCount) }}</span>
+            </button>
 
-          <button
-            class="group flex items-center gap-2 transition-colors"
-            :class="isBookmarked ? 'text-brand' : 'hover:text-brand'"
-            @click="handleBookmark"
-          >
-            <div class="rounded-full p-2 transition-colors group-hover:bg-brand/10" :class="isBookmarked ? 'text-brand' : ''">
-              <Bookmark :size="18" :fill="isBookmarked ? 'currentColor' : 'none'" />
+            <div class="inline-flex items-center gap-1.5 rounded-full pr-3 text-[15px]">
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full">
+                <BarChart3 :size="20" stroke-width="1.9" />
+              </span>
+              <span>{{ formatMetric(post.viewsCount) }}</span>
             </div>
-          </button>
+          </div>
 
-          <button type="button" class="group flex items-center gap-2 transition-colors hover:text-brand" @click="handleShare">
-            <div class="rounded-full p-2 transition-colors group-hover:bg-brand/10">
-              <Share2 :size="18" />
-            </div>
-          </button>
+          <div class="ml-3 flex items-center gap-1">
+            <button
+              class="group inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors"
+              :class="isBookmarked ? 'text-text-primary' : 'hover:text-text-primary'"
+              @click="handleBookmark"
+            >
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors group-hover:bg-black/5 dark:group-hover:bg-white/10">
+                <Bookmark :size="20" stroke-width="1.9" :fill="isBookmarked ? 'currentColor' : 'none'" />
+              </span>
+            </button>
+
+            <button
+              type="button"
+              class="group inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:text-text-primary"
+              @click="handleShare"
+            >
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors group-hover:bg-black/5 dark:group-hover:bg-white/10">
+                <Share2 :size="20" stroke-width="1.9" />
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
