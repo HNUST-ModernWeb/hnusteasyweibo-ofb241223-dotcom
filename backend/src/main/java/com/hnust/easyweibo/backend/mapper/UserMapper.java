@@ -84,6 +84,31 @@ public interface UserMapper {
     @Delete("DELETE FROM follows WHERE follower_id = #{followerId} AND following_id = #{followingId}")
     void deleteFollow(@Param("followerId") Long followerId, @Param("followingId") Long followingId);
 
+    @Select("""
+        SELECT u.* FROM follows f
+        JOIN users u ON u.id = f.following_id
+        WHERE f.follower_id = #{userId}
+        ORDER BY f.created_at DESC, u.created_at DESC
+        """)
+    java.util.List<UserEntity> findFollowingUsers(@Param("userId") Long userId);
+
+    @Select("""
+        SELECT u.* FROM follows f
+        JOIN users u ON u.id = f.follower_id
+        WHERE f.following_id = #{userId}
+        ORDER BY f.created_at DESC, u.created_at DESC
+        """)
+    java.util.List<UserEntity> findFollowerUsers(@Param("userId") Long userId);
+
+    @Select("""
+        SELECT u.* FROM follows f
+        JOIN follows reverse_f ON reverse_f.follower_id = f.following_id AND reverse_f.following_id = f.follower_id
+        JOIN users u ON u.id = f.following_id
+        WHERE f.follower_id = #{userId}
+        ORDER BY reverse_f.created_at DESC, u.created_at DESC
+        """)
+    java.util.List<UserEntity> findMutualUsers(@Param("userId") Long userId);
+
     @Select("SELECT COUNT(*) FROM users")
     int countAll();
 

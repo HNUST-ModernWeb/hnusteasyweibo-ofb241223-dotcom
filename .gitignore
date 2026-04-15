@@ -5,3 +5,4 @@ dist/
 .playwright-mcp/
 backend/.idea/
 backend/target/
+backend/.mvn/wrapper/dists/

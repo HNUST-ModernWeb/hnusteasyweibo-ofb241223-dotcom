@@ -72,6 +72,33 @@ public class UserController {
         return commentService.getByAuthorId(id, viewerId);
     }
 
+    @GetMapping("/{id}/following")
+    public java.util.List<UserResponse> listFollowing(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        Long viewerId = authorization == null ? null : authService.requireUserId(authorization);
+        return userService.getFollowingUsers(id, viewerId);
+    }
+
+    @GetMapping("/{id}/followers")
+    public java.util.List<UserResponse> listFollowers(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        Long viewerId = authorization == null ? null : authService.requireUserId(authorization);
+        return userService.getFollowerUsers(id, viewerId);
+    }
+
+    @GetMapping("/{id}/mutuals")
+    public java.util.List<UserResponse> listMutuals(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "Authorization", required = false) String authorization
+    ) {
+        Long viewerId = authorization == null ? null : authService.requireUserId(authorization);
+        return userService.getMutualUsers(id, viewerId);
+    }
+
     @PatchMapping("/me")
     public UserResponse updateCurrentUser(
         @Valid @RequestBody UpdateProfileRequest request,

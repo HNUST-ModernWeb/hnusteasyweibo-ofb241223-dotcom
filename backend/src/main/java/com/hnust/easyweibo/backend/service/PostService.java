@@ -13,15 +13,18 @@ import org.springframework.stereotype.Service;
 
 import com.hnust.easyweibo.backend.domain.dto.post.CreatePostRequest;
 import com.hnust.easyweibo.backend.domain.dto.post.PostResponse;
+import com.hnust.easyweibo.backend.domain.dto.post.PostViewRecordResponse;
 import com.hnust.easyweibo.backend.domain.dto.post.RepublishPostRequest;
 import com.hnust.easyweibo.backend.domain.dto.post.ReportPostRequest;
 import com.hnust.easyweibo.backend.domain.dto.post.UpdatePostRequest;
 import com.hnust.easyweibo.backend.domain.entity.PostEntity;
 import com.hnust.easyweibo.backend.domain.entity.PostImageEntity;
+import com.hnust.easyweibo.backend.domain.entity.PostViewEntity;
 import com.hnust.easyweibo.backend.domain.entity.ReportEntity;
 import com.hnust.easyweibo.backend.exception.ApiException;
 import com.hnust.easyweibo.backend.mapper.PostImageMapper;
 import com.hnust.easyweibo.backend.mapper.PostMapper;
+import com.hnust.easyweibo.backend.mapper.PostViewMapper;
 import com.hnust.easyweibo.backend.mapper.ReportMapper;
 
 @Service
@@ -33,6 +36,7 @@ public class PostService {
 
     private final PostMapper postMapper;
     private final PostImageMapper postImageMapper;
+    private final PostViewMapper postViewMapper;
     private final ReportMapper reportMapper;
     private final UserService userService;
     private final NotificationService notificationService;
@@ -40,12 +44,14 @@ public class PostService {
     public PostService(
         PostMapper postMapper,
         PostImageMapper postImageMapper,
+        PostViewMapper postViewMapper,
         ReportMapper reportMapper,
         UserService userService,
         NotificationService notificationService
     ) {
         this.postMapper = postMapper;
         this.postImageMapper = postImageMapper;
+        this.postViewMapper = postViewMapper;
         this.reportMapper = reportMapper;
         this.userService = userService;
         this.notificationService = notificationService;
@@ -61,9 +67,33 @@ public class PostService {
     }
 
     public PostResponse getDetailById(Long id, Long viewerId) {
-        requireVisiblePost(id, viewerId);
-        postMapper.incrementViewCount(id);
+        PostEntity post = requireVisiblePost(id, viewerId);
+        if (viewerId != null) {
+            PostViewEntity view = new PostViewEntity();
+            view.setPostId(id);
+            view.setViewerId(viewerId);
+            view.setViewedAt(java.time.LocalDateTime.now());
+            postViewMapper.insert(view);
+            postMapper.incrementViewCount(id);
+        }
         return toResponse(postMapper.findById(id), viewerId);
+    }
+
+    public List<PostViewRecordResponse> getViewRecords(Long postId, Long requesterId) {
+        PostEntity post = postMapper.findById(postId);
+        if (post == null || !isVisibleToViewer(post, requesterId)) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "帖子不存在");
+        }
+        if (!post.getAuthorId().equals(requesterId) && !userService.isAdmin(requesterId)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "只有作者和管理员可以查看浏览记录");
+        }
+        return postViewMapper.findByPostId(postId).stream()
+            .map(view -> new PostViewRecordResponse(
+                String.valueOf(view.getId()),
+                userService.getById(view.getViewerId(), requesterId),
+                view.getViewedAt().format(TIME_FORMATTER)
+            ))
+            .toList();
     }
 
     public List<PostResponse> getByAuthor(Long authorId, Long viewerId) {

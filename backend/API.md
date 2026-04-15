@@ -146,6 +146,18 @@
 
 获取用户转发列表。
 
+### GET `/users/{id}/following`
+
+获取指定用户的关注列表。
+
+### GET `/users/{id}/followers`
+
+获取指定用户的粉丝列表。
+
+### GET `/users/{id}/mutuals`
+
+获取和指定用户互相关注的用户列表。
+
 ## 帖子
 
 ### GET `/posts`
@@ -155,6 +167,13 @@
 ### GET `/posts/{id}`
 
 帖子详情。每次成功打开详情页时，后端会为该帖子增加一次浏览量。
+
+### GET `/posts/{id}/views`
+
+获取帖子浏览记录。
+
+- 仅作者和管理员可查看
+- 返回值包含浏览用户和浏览时间
 
 ### POST `/posts`
 
@@ -250,6 +269,66 @@
 ### GET `/topics/trending?limit=6`
 
 获取热门话题。
+
+## 聊天
+
+### GET `/chat/conversations`
+
+获取当前用户的会话列表，包含：
+- 对方用户信息
+- 最近一条消息预览
+- 最近时间
+- 未读数
+- 是否可继续发送
+
+### POST `/chat/conversations`
+
+创建或复用一个一对一会话。
+
+```json
+{
+  "targetUserId": "2"
+}
+```
+
+### GET `/chat/conversations/{id}`
+
+获取单个会话详情与消息列表。
+
+### POST `/chat/conversations/{id}/messages`
+
+发送文本消息。
+
+```json
+{
+  "content": "你好，方便聊一下吗？"
+}
+```
+
+规则：
+- 互关用户可无限聊天
+- 非互关陌生人最多先发一条开场消息
+- 对方回复后即可继续无限聊天
+- 任一方拉黑后，会话保留但不能继续发送
+
+### POST `/chat/conversations/{id}/read`
+
+把会话中的未读消息标记为已读。
+
+### POST `/chat/messages/{id}/recall`
+
+撤回自己发送的消息。
+
+- 当前实现为 2 分钟内可撤回
+- 撤回后消息显示为“撤回了一条消息”
+
+### POST `/chat/users/{id}/block`
+
+拉黑某个用户。
+
+### DELETE `/chat/users/{id}/block`
+
+解除拉黑某个用户。
 
 ## 上传
 

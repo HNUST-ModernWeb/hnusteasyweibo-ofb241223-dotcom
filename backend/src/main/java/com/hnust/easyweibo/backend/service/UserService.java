@@ -72,6 +72,27 @@ public class UserService {
             .toList();
     }
 
+    public java.util.List<UserResponse> getFollowingUsers(Long userId, Long viewerId) {
+        getEntityById(userId);
+        return userMapper.findFollowingUsers(userId).stream()
+            .map(user -> toResponse(user, viewerId))
+            .toList();
+    }
+
+    public java.util.List<UserResponse> getFollowerUsers(Long userId, Long viewerId) {
+        getEntityById(userId);
+        return userMapper.findFollowerUsers(userId).stream()
+            .map(user -> toResponse(user, viewerId))
+            .toList();
+    }
+
+    public java.util.List<UserResponse> getMutualUsers(Long userId, Long viewerId) {
+        getEntityById(userId);
+        return userMapper.findMutualUsers(userId).stream()
+            .map(user -> toResponse(user, viewerId))
+            .toList();
+    }
+
     public java.util.List<UserResponse> getUsersForAdmin(String query, String status, String muteStatus) {
         return userMapper.findForAdmin(query, status, muteStatus).stream()
             .map(user -> toResponse(user, null))
@@ -199,6 +220,10 @@ public class UserService {
 
     public boolean isAdmin(Long userId) {
         return "ADMIN".equalsIgnoreCase(getEntityById(userId).getRole());
+    }
+
+    public boolean isMutualFollow(Long leftUserId, Long rightUserId) {
+        return userMapper.existsFollow(leftUserId, rightUserId) && userMapper.existsFollow(rightUserId, leftUserId);
     }
 
     public int countUsers() {

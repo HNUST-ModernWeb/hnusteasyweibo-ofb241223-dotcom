@@ -43,6 +43,12 @@ export interface Comment {
   isLiked?: boolean;
 }
 
+export interface PostViewRecord {
+  id: string;
+  viewer: User;
+  viewedAt: string;
+}
+
 export interface Notification {
   id: string;
   type: 'like' | 'comment' | 'follow' | 'mention' | 'system';
@@ -59,6 +65,36 @@ export interface Topic {
   id: string;
   name: string;
   postCount: number;
+}
+
+export type RelationshipTab = 'following' | 'followers' | 'mutual';
+
+export interface Conversation {
+  id: string;
+  targetUser: User;
+  lastMessage: string;
+  lastMessageAt: string;
+  unreadCount: number;
+  blockedByCurrentUser: boolean;
+  blockedByOtherUser: boolean;
+  canSend: boolean;
+  restrictionReason?: string;
+}
+
+export interface ConversationMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  sender: User;
+  content: string;
+  createdAt: string;
+  read: boolean;
+  recalled: boolean;
+  canRecall: boolean;
+}
+
+export interface ConversationDetail extends Conversation {
+  messages: ConversationMessage[];
 }
 
 export type ReportCategory = 'spam' | 'abuse' | 'misinformation' | 'copyright' | 'other';

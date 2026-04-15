@@ -1,4 +1,4 @@
-import type { AdminOverview, AdminReport, AiConversation, AiMessage, AiModelId, Comment, Notification, Post, ReportCategory, Topic, User } from '../types';
+import type { AdminOverview, AdminReport, AiConversation, AiMessage, AiModelId, Comment, Conversation, ConversationDetail, ConversationMessage, Notification, Post, PostViewRecord, RelationshipTab, ReportCategory, Topic, User } from '../types';
 import { API_ORIGIN, apiRequest, getAuthToken, normalizeAssetUrl, setAuthToken } from './http';
 
 type ApiUser = {
@@ -59,6 +59,40 @@ type ApiAiConversationDetail = {
   createdAt: string;
   updatedAt: string;
   messages: ApiAiMessage[];
+};
+
+type ApiPostViewRecord = {
+  id: string;
+  viewer: ApiUser;
+  viewedAt: string;
+};
+
+type ApiConversation = {
+  id: string;
+  targetUser: ApiUser;
+  lastMessage: string;
+  lastMessageAt: string;
+  unreadCount: number;
+  blockedByCurrentUser: boolean;
+  blockedByOtherUser: boolean;
+  canSend: boolean;
+  restrictionReason?: string | null;
+};
+
+type ApiConversationMessage = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  sender: ApiUser;
+  content: string;
+  createdAt: string;
+  read: boolean;
+  recalled: boolean;
+  canRecall: boolean;
+};
+
+type ApiConversationDetail = ApiConversation & {
+  messages: ApiConversationMessage[];
 };
 
 type ApiAdminReport = {
@@ -227,6 +261,22 @@ const mapPost = (post: ApiPost): Post => {
 const mapComment = (comment: ApiComment): Comment => ({
   ...comment,
   author: mapUser(comment.author),
+});
+
+const mapPostViewRecord = (record: ApiPostViewRecord): PostViewRecord => ({
+  ...record,
+  viewer: mapUser(record.viewer),
+});
+
+const mapConversationMessage = (message: ApiConversationMessage): ConversationMessage => ({
+  ...message,
+  sender: mapUser(message.sender),
+});
+
+const mapConversation = (conversation: ApiConversation): Conversation => ({
+  ...conversation,
+  targetUser: mapUser(conversation.targetUser),
+  restrictionReason: conversation.restrictionReason || undefined,
 });
 
 const sortByCreatedAt = <T extends { createdAt: string }>(items: T[]) =>
@@ -498,6 +548,11 @@ export const postService = {
       'required',
     );
   },
+
+  async getPostViews(postId: string): Promise<PostViewRecord[]> {
+    const records = await apiRequest<ApiPostViewRecord[]>(`/posts/${postId}/views`, { method: 'GET' }, 'required');
+    return records.map(mapPostViewRecord);
+  },
 };
 
 export const commentService = {
@@ -580,6 +635,16 @@ export const userService = {
     const mapped = users.map(mapUser);
     writeCache('recommended-users', mapped);
     return mapped;
+  },
+
+  async getRelationshipList(userId: string, tab: RelationshipTab): Promise<User[]> {
+    const endpoint = tab === 'followers'
+      ? `/users/${userId}/followers`
+      : tab === 'mutual'
+        ? `/users/${userId}/mutuals`
+        : `/users/${userId}/following`;
+    const users = await apiRequest<ApiUser[]>(endpoint, { method: 'GET' }, 'optional');
+    return users.map(mapUser);
   },
 };
 
@@ -803,6 +868,62 @@ export const aiService = {
     },
   ) {
     return streamApiRequest(`/ai/conversations/${id}/retry`, undefined, handlers);
+  },
+};
+
+export const chatService = {
+  async getConversations(): Promise<Conversation[]> {
+    const conversations = await apiRequest<ApiConversation[]>('/chat/conversations', { method: 'GET' }, 'required');
+    return conversations.map(mapConversation);
+  },
+
+  async createConversation(targetUserId: string): Promise<Conversation> {
+    const conversation = await apiRequest<ApiConversation>(
+      '/chat/conversations',
+      {
+        method: 'POST',
+        body: JSON.stringify({ targetUserId: Number(targetUserId) }),
+      },
+      'required',
+    );
+    return mapConversation(conversation);
+  },
+
+  async getConversation(id: string): Promise<ConversationDetail> {
+    const conversation = await apiRequest<ApiConversationDetail>(`/chat/conversations/${id}`, { method: 'GET' }, 'required');
+    return {
+      ...mapConversation(conversation),
+      messages: conversation.messages.map(mapConversationMessage),
+    };
+  },
+
+  async sendMessage(conversationId: string, content: string): Promise<ConversationMessage> {
+    const message = await apiRequest<ApiConversationMessage>(
+      `/chat/conversations/${conversationId}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ content }),
+      },
+      'required',
+    );
+    return mapConversationMessage(message);
+  },
+
+  async markConversationRead(conversationId: string): Promise<void> {
+    await apiRequest<{ message: string }>(`/chat/conversations/${conversationId}/read`, { method: 'POST' }, 'required');
+  },
+
+  async recallMessage(messageId: string): Promise<ConversationMessage> {
+    const message = await apiRequest<ApiConversationMessage>(`/chat/messages/${messageId}/recall`, { method: 'POST' }, 'required');
+    return mapConversationMessage(message);
+  },
+
+  async blockUser(userId: string): Promise<void> {
+    await apiRequest<{ message: string }>(`/chat/users/${userId}/block`, { method: 'POST' }, 'required');
+  },
+
+  async unblockUser(userId: string): Promise<void> {
+    await apiRequest<{ message: string }>(`/chat/users/${userId}/block`, { method: 'DELETE' }, 'required');
   },
 };
 

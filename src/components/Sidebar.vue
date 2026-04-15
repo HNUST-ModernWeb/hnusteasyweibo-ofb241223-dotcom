@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { Search, Bell, User, Settings, LogOut, PlusSquare, Moon, Sun, Hash, LayoutDashboard } from 'lucide-vue-next';
+import { Search, Bell, User, Settings, LogOut, PlusSquare, Moon, Sun, Hash, LayoutDashboard, UserRoundPlus, MessageCircle } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
 import { useNotifications } from '../composables/useNotifications';
 import { useTheme } from '../composables/useTheme';
@@ -19,6 +19,8 @@ const navItems = computed(() => [
   { icon: Hash, label: '话题', path: '/topics' },
   { icon: Bell, label: '通知', path: '/notifications' },
   { icon: User, label: '个人主页', path: user.value ? `/profile/${user.value.username}` : '/login' },
+  { icon: UserRoundPlus, label: '关注列表', path: '/connections' },
+  { icon: MessageCircle, label: '聊天', path: '/chat' },
   ...(user.value?.role === 'ADMIN' ? [{ icon: LayoutDashboard, label: '控制台', path: '/admin' }] : []),
   { icon: Settings, label: '设置', path: '/settings' },
 ]);

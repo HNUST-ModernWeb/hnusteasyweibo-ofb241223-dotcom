@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { userService, postService, commentService, uploadService } from '../api/services';
+import { chatService, userService, postService, commentService, uploadService } from '../api/services';
 import { User, Post, Comment } from '../types';
 import PostCard from '../components/PostCard.vue';
-import { ArrowLeft, Calendar, MapPin, Link as LinkIcon } from 'lucide-vue-next';
+import { ArrowLeft, Calendar, MapPin, Link as LinkIcon, MessageCircle } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
 import { useToast } from '../composables/useToast';
 
@@ -105,6 +105,22 @@ const handleFollow = async () => {
   if (profileUser.value) {
     await userService.followUser(profileUser.value.id);
     loadProfile();
+  }
+};
+
+const handleChat = async () => {
+  if (!isAuthenticated.value) {
+    router.push('/login');
+    return;
+  }
+  if (!profileUser.value) {
+    return;
+  }
+  try {
+    const conversation = await chatService.createConversation(profileUser.value.id);
+    await router.push(`/chat?conversation=${conversation.id}`);
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '创建聊天失败，请稍后重试', 'error');
   }
 };
 
@@ -250,16 +266,25 @@ const handlePreviewUpload = (event: Event, target: 'avatar' | 'cover') => {
         <button v-if="currentUser?.id === profileUser.id" @click="handleEditProfile" class="border border-border rounded-full px-4 py-2 font-bold hover:bg-bg-secondary transition-colors">
           编辑个人资料
         </button>
-        <button 
-          v-else
-          @click="handleFollow"
-          :class="profileUser.isFollowing 
-            ? 'border border-border rounded-full px-4 py-2 font-bold hover:bg-bg-secondary hover:text-text-primary hover:border-text-secondary transition-all group' 
-            : 'bg-text-primary text-bg-primary rounded-full px-4 py-2 font-bold hover:opacity-90 transition-opacity'"
-        >
-          <span class="group-hover:hidden">{{ profileUser.isFollowing ? '正在关注' : '关注' }}</span>
-          <span class="hidden group-hover:inline">取消关注</span>
-        </button>
+        <div v-else class="flex flex-wrap items-center gap-2">
+          <button 
+            @click="handleFollow"
+            :class="profileUser.isFollowing 
+              ? 'border border-border rounded-full px-4 py-2 font-bold hover:bg-bg-secondary hover:text-text-primary hover:border-text-secondary transition-all group' 
+              : 'bg-text-primary text-bg-primary rounded-full px-4 py-2 font-bold hover:opacity-90 transition-opacity'"
+          >
+            <span class="group-hover:hidden">{{ profileUser.isFollowing ? '正在关注' : '关注' }}</span>
+            <span class="hidden group-hover:inline">取消关注</span>
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-full border border-border px-4 py-2 font-bold hover:bg-bg-secondary transition-colors"
+            @click="handleChat"
+          >
+            <MessageCircle :size="16" />
+            聊天
+          </button>
+        </div>
     </div>
 
     <div class="px-4 pb-2 space-y-1.5">

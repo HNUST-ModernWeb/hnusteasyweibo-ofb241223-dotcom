@@ -488,7 +488,7 @@ watch(
                   </div>
                   <button
                     type="button"
-                    class="rounded-full border border-border px-3 py-2 text-sm font-medium hover:bg-bg-secondary"
+                    class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-bg-secondary"
                     @click="setActiveTab('posts')"
                   >
                     管理

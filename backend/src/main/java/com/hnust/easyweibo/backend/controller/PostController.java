@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.hnust.easyweibo.backend.domain.dto.post.CreatePostRequest;
 import com.hnust.easyweibo.backend.domain.dto.post.PostResponse;
+import com.hnust.easyweibo.backend.domain.dto.post.PostViewRecordResponse;
 import com.hnust.easyweibo.backend.domain.dto.post.RepublishPostRequest;
 import com.hnust.easyweibo.backend.domain.dto.post.ReportPostRequest;
 import com.hnust.easyweibo.backend.domain.dto.post.UpdatePostRequest;
@@ -46,6 +47,15 @@ public class PostController {
     ) {
         Long viewerId = authorization == null ? null : authService.requireUserId(authorization);
         return postService.getDetailById(id, viewerId);
+    }
+
+    @GetMapping("/posts/{id}/views")
+    public List<PostViewRecordResponse> getPostViews(
+        @PathVariable("id") Long id,
+        @RequestHeader("Authorization") String authorization
+    ) {
+        Long currentUserId = authService.requireUserId(authorization);
+        return postService.getViewRecords(id, currentUserId);
     }
 
     @PostMapping("/posts")

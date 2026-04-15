@@ -7,7 +7,8 @@ import { zhCN } from 'date-fns/locale';
 import { postService } from '../api/services';
 import { useAuth } from '../composables/useAuth';
 import { useToast } from '../composables/useToast';
-import type { Post, ReportCategory } from '../types';
+import type { Post, PostViewRecord, ReportCategory } from '../types';
+import PostViewsDrawer from './PostViewsDrawer.vue';
 
 type ContentSegment =
   | { type: 'text'; value: string }
@@ -38,6 +39,9 @@ const isReposted = ref(props.post.isReposted);
 const repostsCount = ref(props.post.repostsCount);
 const isBookmarked = ref(props.post.isBookmarked);
 const showActionSheet = ref(false);
+const showViewsDrawer = ref(false);
+const loadingViews = ref(false);
+const postViewRecords = ref<PostViewRecord[]>([]);
 const editing = ref(false);
 const savingEdit = ref(false);
 const deleting = ref(false);
@@ -61,6 +65,7 @@ watch(
 );
 
 const isAuthor = computed(() => user.value?.id === props.post.authorId);
+const canInspectViews = computed(() => Boolean(user.value && (user.value.id === props.post.authorId || user.value.role === 'ADMIN')));
 const formattedTime = computed(() => (
   formatDistanceToNow(new Date(props.post.createdAt), { addSuffix: true, locale: zhCN })
 ));
@@ -172,6 +177,23 @@ const handleShare = async (e: Event) => {
     showToast('帖子链接已复制', 'success');
   } catch {
     showToast('复制链接失败，请重试', 'error');
+  }
+};
+
+const openViewsDrawer = async (event: Event) => {
+  event.stopPropagation();
+  if (!canInspectViews.value) {
+    return;
+  }
+  loadingViews.value = true;
+  showViewsDrawer.value = true;
+  try {
+    postViewRecords.value = await postService.getPostViews(props.post.id);
+  } catch (error) {
+    showViewsDrawer.value = false;
+    showToast(error instanceof Error ? error.message : '加载浏览记录失败，请稍后重试', 'error');
+  } finally {
+    loadingViews.value = false;
   }
 };
 
@@ -410,7 +432,18 @@ const handleSubmitReport = async () => {
               <span>{{ formatMetric(likesCount) }}</span>
             </button>
 
-            <div class="inline-flex items-center gap-1.5 rounded-full pr-3 text-[15px]">
+            <button
+              v-if="canInspectViews"
+              type="button"
+              class="group inline-flex items-center gap-1.5 rounded-full pr-3 text-[15px] transition-colors hover:text-text-primary"
+              @click="openViewsDrawer"
+            >
+              <span class="inline-flex h-9 w-9 items-center justify-center rounded-full transition-colors group-hover:bg-black/5 dark:group-hover:bg-white/10">
+                <BarChart3 :size="20" stroke-width="1.9" />
+              </span>
+              <span>{{ formatMetric(post.viewsCount) }}</span>
+            </button>
+            <div v-else class="inline-flex items-center gap-1.5 rounded-full pr-3 text-[15px]">
               <span class="inline-flex h-9 w-9 items-center justify-center rounded-full">
                 <BarChart3 :size="20" stroke-width="1.9" />
               </span>
@@ -602,5 +635,12 @@ const handleSubmitReport = async () => {
         </div>
       </div>
     </div>
+
+    <PostViewsDrawer
+      :open="showViewsDrawer"
+      :loading="loadingViews"
+      :records="postViewRecords"
+      @close="showViewsDrawer = false"
+    />
   </div>
 </template>
