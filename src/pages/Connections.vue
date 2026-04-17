@@ -140,7 +140,6 @@ const startChat = async (target: User) => {
       </button>
       <div>
         <h1 class="text-xl font-bold">关注列表</h1>
-        <p class="text-sm text-text-secondary">查看你关注的人、关注你的人以及互相关注的连接。</p>
       </div>
     </div>
 

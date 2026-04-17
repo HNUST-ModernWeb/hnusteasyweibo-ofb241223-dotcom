@@ -9,6 +9,7 @@ import { useAuth } from '../composables/useAuth';
 import { useToast } from '../composables/useToast';
 import type { Post, PostViewRecord, ReportCategory } from '../types';
 import PostViewsDrawer from './PostViewsDrawer.vue';
+import ImageLightbox from './ImageLightbox.vue';
 
 type ContentSegment =
   | { type: 'text'; value: string }
@@ -51,6 +52,8 @@ const showReportModal = ref(false);
 const reportCategory = ref<ReportCategory>('spam');
 const reportDetails = ref('');
 const editContent = ref('');
+const previewImages = ref<string[]>([]);
+const previewIndex = ref(0);
 
 watch(
   () => props.post,
@@ -178,6 +181,12 @@ const handleShare = async (e: Event) => {
   } catch {
     showToast('复制链接失败，请重试', 'error');
   }
+};
+
+const openImagePreview = (event: Event, images: string[], index: number) => {
+  event.stopPropagation();
+  previewImages.value = images;
+  previewIndex.value = index;
 };
 
 const openViewsDrawer = async (event: Event) => {
@@ -383,14 +392,20 @@ const handleSubmitReport = async () => {
           v-if="post.images && post.images.length > 0"
           :class="['mt-3 grid gap-0.5 overflow-hidden rounded-2xl border border-border', post.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2']"
         >
-          <img
+          <button
             v-for="(img, idx) in post.images"
             :key="idx"
-            :src="img"
-            alt="Post content"
-            loading="lazy"
-            class="aspect-video h-full w-full object-cover"
-          />
+            type="button"
+            class="block overflow-hidden bg-transparent"
+            @click="openImagePreview($event, post.images || [], idx)"
+          >
+            <img
+              :src="img"
+              alt="Post content"
+              loading="lazy"
+              class="aspect-video h-full w-full object-cover transition hover:scale-[1.01]"
+            />
+          </button>
         </div>
 
         <div class="mt-3 flex items-center justify-between text-text-secondary">
@@ -641,6 +656,13 @@ const handleSubmitReport = async () => {
       :loading="loadingViews"
       :records="postViewRecords"
       @close="showViewsDrawer = false"
+    />
+    <ImageLightbox
+      :open="previewImages.length > 0"
+      :images="previewImages"
+      :index="previewIndex"
+      @close="previewImages = []"
+      @update:index="previewIndex = $event"
     />
   </div>
 </template>

@@ -13,7 +13,7 @@ const recommended = ref<User[]>([]);
 const searchQuery = ref('');
 const { user, isAuthenticated } = useAuth();
 const { showToast } = useToast();
-const footerLinks = ['服务条款', '隐私政策', 'Cookie 政策', '无障碍', '广告信息', '更多…', '© 2026 HNUST Easy WeiBo'];
+const footerLinks = ['服务条款', '隐私政策', 'Cookie 政策', '© 2026 HNUST Easy WeiBo'];
 
 const loadRecommendedUsers = async () => {
   try {

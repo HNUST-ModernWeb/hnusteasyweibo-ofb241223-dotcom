@@ -80,7 +80,7 @@ type ApiConversation = {
   restrictionReason?: string | null;
 };
 
-type ApiConversationMessage = {
+export type ApiConversationMessage = {
   id: string;
   conversationId: string;
   senderId: string;
@@ -280,7 +280,7 @@ const mapPostViewRecord = (record: ApiPostViewRecord): PostViewRecord => ({
   viewer: mapUser(record.viewer),
 });
 
-const mapConversationMessage = (message: ApiConversationMessage): ConversationMessage => ({
+export const mapConversationMessage = (message: ApiConversationMessage): ConversationMessage => ({
   ...message,
   sender: mapUser(message.sender),
   fileUrl: message.fileUrl ? normalizeAssetUrl(message.fileUrl) : undefined,

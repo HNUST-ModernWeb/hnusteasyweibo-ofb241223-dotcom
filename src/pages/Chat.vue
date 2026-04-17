@@ -81,7 +81,6 @@ const startConversation = async (target: User) => {
         </button>
         <div>
           <h1 class="text-xl font-bold">聊天</h1>
-          <p class="text-sm text-text-secondary">查看最近对话、未读消息，并与互关好友或已有会话对象聊天。</p>
         </div>
       </div>
     </div>

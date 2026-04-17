@@ -4,11 +4,12 @@ import { useRoute, useRouter } from 'vue-router';
 import { postService, commentService } from '../api/services';
 import { Post, Comment as CommentType } from '../types';
 import PostCard from '../components/PostCard.vue';
-import { ArrowLeft, Image as ImageIcon, Send, SmilePlus, X } from 'lucide-vue-next';
+import { ArrowLeft, Image as ImageIcon, SmilePlus, X } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
 import { useToast } from '../composables/useToast';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import ImageLightbox from '../components/ImageLightbox.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -19,6 +20,8 @@ const loading = ref(true);
 const newComment = ref('');
 const emojiOpen = ref(false);
 const commentImages = ref<Array<{ file: File; previewUrl: string }>>([]);
+const previewImages = ref<string[]>([]);
+const previewIndex = ref(0);
 const { user, isAuthenticated } = useAuth();
 const { showToast } = useToast();
 const emojiPalette = ['😀', '😂', '🥳', '👍', '👏', '🔥', '✨', '🎉', '❤️', '🙏', '🤝', '📚', '💻', '😄', '😮', '🥲', '😎', '👀'];
@@ -70,6 +73,11 @@ const handleImageUpload = (event: Event) => {
     reader.readAsDataURL(file);
   });
   target.value = '';
+};
+
+const openImagePreview = (images: string[], index: number) => {
+  previewImages.value = images;
+  previewIndex.value = index;
 };
 </script>
 
@@ -194,17 +202,31 @@ const handleImageUpload = (event: Event) => {
           </div>
           <p class="mt-1 text-[15px]">{{ comment.content }}</p>
           <div v-if="comment.images?.length" class="mt-3 flex flex-wrap gap-2">
-            <img
+            <button
               v-for="(image, index) in comment.images"
               :key="`${comment.id}-${index}`"
-              :src="image"
-              alt="Comment image"
-              loading="lazy"
-              class="h-24 w-24 rounded-2xl object-cover"
-            />
+              type="button"
+              class="block overflow-hidden rounded-2xl bg-transparent"
+              @click="openImagePreview(comment.images || [], index)"
+            >
+              <img
+                :src="image"
+                alt="Comment image"
+                loading="lazy"
+                class="h-24 w-24 rounded-2xl object-cover transition hover:scale-[1.02]"
+              />
+            </button>
           </div>
         </div>
       </div>
     </div>
+
+    <ImageLightbox
+      :open="previewImages.length > 0"
+      :images="previewImages"
+      :index="previewIndex"
+      @close="previewImages = []"
+      @update:index="previewIndex = $event"
+    />
   </div>
 </template>

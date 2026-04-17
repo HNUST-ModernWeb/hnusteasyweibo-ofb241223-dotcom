@@ -58,13 +58,6 @@ const heading = computed(() => {
   }
   return '登录到 HNUST Easy WeiBo';
 });
-const subtitle = computed(() => (
-  isRegisterMode.value
-    ? '创建一个校园账号，马上开始发布、评论和关注。'
-    : isResetMode.value
-      ? '输入用户名、昵称和新密码，完成演示版密码重置。'
-      : '使用校园账号进入信息流、通知和个人主页。'
-));
 const submitLabel = computed(() => {
   if (loading.value) {
     if (isRegisterMode.value) {
@@ -221,7 +214,7 @@ defineExpose({
             <span>HNUST Easy WeiBo</span>
           </div>
 
-          <div class="form-center">
+          <form class="form-center" @submit.prevent="onSubmit">
             <div v-if="errorMsg" class="form-banner form-banner--error" role="alert">
               {{ errorMsg }}
             </div>
@@ -230,7 +223,6 @@ defineExpose({
             </div>
 
             <h1>{{ heading }}</h1>
-            <p class="subtitle">{{ subtitle }}</p>
 
             <template v-if="isRegisterMode || isResetMode">
               <label class="field-label" for="register-nickname">昵称</label>
@@ -271,6 +263,7 @@ defineExpose({
                 maxlength="64"
                 :placeholder="isRegisterMode || isResetMode ? '至少 6 位密码' : '请输入密码'"
                 :autocomplete="isRegisterMode || isResetMode ? 'new-password' : 'current-password'"
+                @keydown.enter.prevent="onSubmit"
                 @focus="focusedField = 'password'; isTyping = true"
                 @blur="focusedField = 'none'; isTyping = false"
               />
@@ -316,6 +309,7 @@ defineExpose({
                   maxlength="64"
                   placeholder="再次输入密码"
                   autocomplete="new-password"
+                  @keydown.enter.prevent="onSubmit"
                   @focus="focusedField = 'confirm'; isTyping = true"
                   @blur="focusedField = 'none'; isTyping = false"
                 />
@@ -346,7 +340,7 @@ defineExpose({
               {{ isRegisterMode ? '注册成功后会自动登录并进入首页。' : '重置成功后可直接返回登录页使用新密码登录。' }}
             </p>
 
-            <button class="login-btn" type="button" :disabled="loading" @click="onSubmit">
+            <button class="login-btn" type="submit" :disabled="loading">
               {{ submitLabel }}
             </button>
 
@@ -356,7 +350,7 @@ defineExpose({
                 {{ switchLabel }}
               </button>
             </p>
-          </div>
+          </form>
         </div>
       </section>
     </div>
@@ -497,19 +491,12 @@ h1 {
   white-space: nowrap;
 }
 
-.subtitle {
-  margin-top: 10px;
-  margin-bottom: 34px;
-  color: #737373;
-  font-size: 1.02rem;
-  line-height: 1.6;
-}
-
 .field-label {
   display: block;
   font-size: 1rem;
   font-weight: 700;
   color: #171717;
+  margin-top: 26px;
   margin-bottom: 10px;
 }
 

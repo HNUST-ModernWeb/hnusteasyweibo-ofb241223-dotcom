@@ -30,10 +30,12 @@ public class ChatService {
 
     private final ChatMapper chatMapper;
     private final UserService userService;
+    private final ChatRealtimeService chatRealtimeService;
 
-    public ChatService(ChatMapper chatMapper, UserService userService) {
+    public ChatService(ChatMapper chatMapper, UserService userService, ChatRealtimeService chatRealtimeService) {
         this.chatMapper = chatMapper;
         this.userService = userService;
+        this.chatRealtimeService = chatRealtimeService;
     }
 
     public List<ChatConversationResponse> getConversations(Long currentUserId) {
@@ -116,12 +118,15 @@ public class ChatService {
         message.setRecalledAt(null);
         chatMapper.insertMessage(message);
         chatMapper.touchConversation(conversationId, message.getCreatedAt());
-        return toMessageResponse(chatMapper.findMessageById(message.getId()), currentUserId);
+        ChatMessageResponse response = toMessageResponse(chatMapper.findMessageById(message.getId()), currentUserId);
+        chatRealtimeService.publishMessageCreated(conversationId, participants(conversation), response);
+        return response;
     }
 
     public void markConversationRead(Long conversationId, Long currentUserId) {
-        requireConversationParticipant(conversationId, currentUserId);
+        ConversationEntity conversation = requireConversationParticipant(conversationId, currentUserId);
         chatMapper.markConversationAsRead(conversationId, currentUserId, LocalDateTime.now());
+        chatRealtimeService.publishConversationInvalidated(conversationId, participants(conversation));
     }
 
     public ChatMessageResponse recallMessage(Long messageId, Long currentUserId) {
@@ -143,7 +148,10 @@ public class ChatService {
         LocalDateTime recalledAt = LocalDateTime.now();
         chatMapper.recallMessage(messageId, recalledAt);
         chatMapper.touchConversation(message.getConversationId(), recalledAt);
-        return toMessageResponse(chatMapper.findMessageById(messageId), currentUserId);
+        ConversationEntity conversation = requireConversationParticipant(message.getConversationId(), currentUserId);
+        ChatMessageResponse response = toMessageResponse(chatMapper.findMessageById(messageId), currentUserId);
+        chatRealtimeService.publishMessageRecalled(message.getConversationId(), participants(conversation), response);
+        return response;
     }
 
     public void blockUser(Long currentUserId, Long targetUserId) {
@@ -154,10 +162,18 @@ public class ChatService {
         if (!chatMapper.existsBlock(currentUserId, targetUserId)) {
             chatMapper.insertBlock(currentUserId, targetUserId, LocalDateTime.now());
         }
+        ConversationEntity conversation = findConversationBetweenUsers(currentUserId, targetUserId);
+        if (conversation != null) {
+            chatRealtimeService.publishConversationInvalidated(conversation.getId(), participants(conversation));
+        }
     }
 
     public void unblockUser(Long currentUserId, Long targetUserId) {
         chatMapper.deleteBlock(currentUserId, targetUserId);
+        ConversationEntity conversation = findConversationBetweenUsers(currentUserId, targetUserId);
+        if (conversation != null) {
+            chatRealtimeService.publishConversationInvalidated(conversation.getId(), participants(conversation));
+        }
     }
 
     private ConversationEntity findOrCreateConversation(Long leftUserId, Long rightUserId) {
@@ -187,6 +203,16 @@ public class ChatService {
             throw new ApiException(HttpStatus.FORBIDDEN, "不能访问他人的会话");
         }
         return conversation;
+    }
+
+    private ConversationEntity findConversationBetweenUsers(Long userAId, Long userBId) {
+        long left = Math.min(userAId, userBId);
+        long right = Math.max(userAId, userBId);
+        return chatMapper.findConversationBetween(left, right);
+    }
+
+    private List<Long> participants(ConversationEntity conversation) {
+        return List.of(conversation.getUserAId(), conversation.getUserBId());
     }
 
     private Long getTargetUserId(ConversationEntity conversation, Long currentUserId) {

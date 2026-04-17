@@ -82,7 +82,6 @@ watch(
         </button>
         <div>
           <h1 class="text-xl font-bold">话题</h1>
-          <p class="text-sm text-text-secondary">默认展示校园内的热门话题，点开即可查看相关内容。</p>
         </div>
       </div>
     </div>

@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   ArrowLeft,
   Ban,
   Download,
+  FileUp,
+  ImagePlus,
   MoreHorizontal,
-  Paperclip,
   Send,
   SmilePlus,
   Undo2,
   Video,
   X,
 } from 'lucide-vue-next';
-import { chatService, uploadService } from '../api/services';
+import type { ApiConversationMessage } from '../api/services';
+import { chatService, mapConversationMessage, uploadService } from '../api/services';
 import { useAuth } from '../composables/useAuth';
+import { useChatSocket } from '../composables/useChatSocket';
 import { useToast } from '../composables/useToast';
-import type { ConversationDetail } from '../types';
+import type { ConversationDetail, ConversationMessage } from '../types';
+import ImageLightbox from '../components/ImageLightbox.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -34,14 +38,36 @@ const emojiOpen = ref(false);
 const composing = ref('');
 const messagesContainer = ref<HTMLElement | null>(null);
 const attachmentInput = ref<HTMLInputElement | null>(null);
+const previewImages = ref<string[]>([]);
+const previewIndex = ref(0);
 
-const emojiPalette = ['😀', '😂', '🥳', '👍', '👏', '🔥', '✨', '🎉', '❤️', '🙏', '🤝', '📚', '💻', '😄'];
-const quickEmojis = ['🌞 早上好', '😗 比心', '🙂 困', '😁 此牙', '👍 赞'];
+const emojiPalette = ['😀', '😂', '🥳', '👍', '👏', '🔥', '✨', '🎉', '❤️', '🙏', '🤝', '📚', '💻', '😄', '😮', '🥲', '😎', '👀'];
 const attachmentAccept = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt';
 
 const scrollToBottom = async (behavior: ScrollBehavior = 'smooth') => {
   await nextTick();
   messagesContainer.value?.scrollTo({ top: messagesContainer.value.scrollHeight, behavior });
+};
+
+const upsertMessage = async (incoming: ConversationMessage) => {
+  if (!detail.value) {
+    return;
+  }
+  const current = [...detail.value.messages];
+  const existingIndex = current.findIndex((item) => item.id === incoming.id);
+  if (existingIndex >= 0) {
+    current.splice(existingIndex, 1, incoming);
+  } else {
+    current.push(incoming);
+    current.sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
+  }
+  detail.value = {
+    ...detail.value,
+    lastMessage: incoming.content,
+    lastMessageAt: incoming.createdAt,
+    messages: current,
+  };
+  await scrollToBottom();
 };
 
 const loadDetail = async () => {
@@ -66,6 +92,25 @@ const loadDetail = async () => {
   }
 };
 
+useChatSocket(conversationId, {
+  onMessageCreated: async (message) => {
+    await upsertMessage(mapConversationMessage(message as ApiConversationMessage));
+    if (message.senderId !== user.value?.id) {
+      try {
+        await chatService.markConversationRead(conversationId.value);
+      } catch {
+        // Ignore realtime read failures and leave the optimistic view intact.
+      }
+    }
+  },
+  onMessageRecalled: async (message) => {
+    await upsertMessage(mapConversationMessage(message as ApiConversationMessage));
+  },
+  onConversationInvalidated: async () => {
+    await loadDetail();
+  },
+});
+
 onMounted(loadDetail);
 
 watch(
@@ -83,10 +128,10 @@ const handleSend = async () => {
 
   sending.value = true;
   try {
-    await chatService.sendMessage(detail.value.id, composing.value.trim());
+    const message = await chatService.sendMessage(detail.value.id, composing.value.trim());
     composing.value = '';
     emojiOpen.value = false;
-    await loadDetail();
+    await upsertMessage(message);
   } catch (error) {
     showToast(error instanceof Error ? error.message : '发送失败，请稍后重试', 'error');
   } finally {
@@ -110,8 +155,8 @@ const handleAttachmentSelected = async (event: Event) => {
   uploadingAttachment.value = true;
   try {
     const uploaded = await uploadService.uploadChatAttachment(file);
-    await chatService.sendAttachment(detail.value.id, uploaded);
-    await loadDetail();
+    const message = await chatService.sendAttachment(detail.value.id, uploaded);
+    await upsertMessage(message);
   } catch (error) {
     showToast(error instanceof Error ? error.message : '发送附件失败，请稍后重试', 'error');
   } finally {
@@ -122,8 +167,8 @@ const handleAttachmentSelected = async (event: Event) => {
 const recallMessage = async (messageId: string) => {
   recallingId.value = messageId;
   try {
-    await chatService.recallMessage(messageId);
-    await loadDetail();
+    const message = await chatService.recallMessage(messageId);
+    await upsertMessage(message);
   } catch (error) {
     showToast(error instanceof Error ? error.message : '撤回消息失败，请稍后重试', 'error');
   } finally {
@@ -156,6 +201,11 @@ const insertEmoji = (emoji: string) => {
   composing.value += emoji;
 };
 
+const openImagePreview = (image: string) => {
+  previewImages.value = [image];
+  previewIndex.value = 0;
+};
+
 const formatMessageTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -169,10 +219,7 @@ const formatMessageTime = (value: string) => {
   }).format(date);
 };
 
-const appendQuickEmoji = (value: string) => {
-  const emoji = value.split(' ')[0];
-  composing.value += emoji;
-};
+const canSend = computed(() => detail.value?.canSend ?? false);
 </script>
 
 <template>
@@ -219,62 +266,58 @@ const appendQuickEmoji = (value: string) => {
     <template v-else-if="detail">
       <div ref="messagesContainer" class="h-[calc(100vh-250px)] overflow-y-auto bg-bg-secondary/30 px-4 py-5">
         <div class="mx-auto max-w-4xl space-y-6">
-          <p v-if="!detail.canSend" class="text-center text-sm text-text-secondary">
-            {{ detail.restrictionReason }}
-          </p>
-
           <article
             v-for="message in detail.messages"
             :key="message.id"
             class="space-y-2"
           >
-            <div class="flex items-end gap-3" :class="message.senderId === user?.id ? 'justify-end' : 'justify-start'">
-              <img :src="message.sender.avatar" :alt="message.sender.nickname" class="h-10 w-10 rounded-full object-cover" />
-              <div class="max-w-[72%]">
-                <div
-                  class="rounded-[24px] px-4 py-3 shadow-sm"
-                  :class="message.senderId === user?.id ? 'bg-text-primary text-bg-primary' : 'border border-border bg-bg-primary text-text-primary'"
-                >
-                  <template v-if="message.recalled">
-                    <p class="text-[15px] leading-7">{{ message.content }}</p>
-                  </template>
-                  <template v-else-if="message.messageType === 'IMAGE' && message.fileUrl">
-                    <a :href="message.fileUrl" target="_blank" rel="noreferrer" class="block">
-                      <img :src="message.fileUrl" :alt="message.fileName || '聊天图片'" class="max-h-72 rounded-2xl object-cover" />
-                    </a>
-                    <p v-if="message.content" class="mt-3 whitespace-pre-wrap break-words text-[15px] leading-7">{{ message.content }}</p>
-                  </template>
-                  <template v-else-if="message.messageType === 'FILE' && message.fileUrl">
-                    <a :href="message.fileUrl" target="_blank" rel="noreferrer" class="flex items-center gap-3 rounded-2xl border border-current/15 px-3 py-3">
-                      <Paperclip :size="18" />
-                      <div class="min-w-0">
-                        <p class="truncate font-bold">{{ message.fileName || '附件' }}</p>
-                        <p class="truncate text-xs opacity-80">{{ message.mimeType || '文件消息' }}</p>
-                      </div>
-                      <Download :size="16" class="shrink-0" />
-                    </a>
-                    <p v-if="message.content" class="mt-3 whitespace-pre-wrap break-words text-[15px] leading-7">{{ message.content }}</p>
-                  </template>
-                  <template v-else>
-                    <p class="whitespace-pre-wrap break-words text-[15px] leading-7">{{ message.content }}</p>
-                  </template>
-                </div>
-                <div class="mt-2 flex items-center gap-3 px-1 text-xs text-text-secondary" :class="message.senderId === user?.id ? 'justify-end' : ''">
-                  <span>{{ formatMessageTime(message.createdAt) }}</span>
-                  <button
-                    v-if="message.canRecall"
-                    type="button"
-                    class="inline-flex items-center gap-1 hover:text-text-primary"
-                    :disabled="recallingId === message.id"
-                    @click="recallMessage(message.id)"
+            <div class="flex items-end" :class="message.senderId === user?.id ? 'justify-end' : 'justify-start'">
+              <div class="flex max-w-[78%] items-end gap-3" :class="message.senderId === user?.id ? 'flex-row-reverse' : ''">
+                <img :src="message.sender.avatar" :alt="message.sender.nickname" class="h-10 w-10 rounded-full object-cover" />
+                <div class="flex max-w-full flex-col" :class="message.senderId === user?.id ? 'items-end' : 'items-start'">
+                  <div
+                    class="inline-block max-w-full rounded-[24px] px-4 py-3 shadow-sm"
+                    :class="message.senderId === user?.id ? 'bg-text-primary text-bg-primary' : message.recalled ? 'border border-border bg-bg-primary text-text-secondary' : 'border border-border bg-bg-primary text-text-primary'"
                   >
-                    <Undo2 :size="12" />
-                    {{ recallingId === message.id ? '撤回中' : '撤回' }}
-                  </button>
-                  <span v-else-if="message.recalled" class="inline-flex items-center gap-1">
-                    <Undo2 :size="12" />
-                    已撤回
-                  </span>
+                    <template v-if="message.messageType === 'IMAGE' && message.fileUrl && !message.recalled">
+                      <button type="button" class="block overflow-hidden rounded-2xl" @click="openImagePreview(message.fileUrl)">
+                        <img :src="message.fileUrl" :alt="message.fileName || '聊天图片'" class="max-h-72 rounded-2xl object-cover transition hover:scale-[1.01]" />
+                      </button>
+                      <p v-if="message.content" class="mt-3 whitespace-pre-wrap break-words text-[15px] leading-7">{{ message.content }}</p>
+                    </template>
+                    <template v-else-if="message.messageType === 'FILE' && message.fileUrl && !message.recalled">
+                      <a :href="message.fileUrl" target="_blank" rel="noreferrer" class="flex items-center gap-3 rounded-2xl border border-current/15 px-3 py-3">
+                        <FileUp :size="18" />
+                        <div class="min-w-0">
+                          <p class="truncate font-bold">{{ message.fileName || '附件' }}</p>
+                          <p class="truncate text-xs opacity-80">{{ message.mimeType || '文件消息' }}</p>
+                        </div>
+                        <Download :size="16" class="shrink-0" />
+                      </a>
+                      <p v-if="message.content" class="mt-3 whitespace-pre-wrap break-words text-[15px] leading-7">{{ message.content }}</p>
+                    </template>
+                    <template v-else>
+                      <p class="whitespace-pre-wrap break-words text-[15px] leading-7">{{ message.content }}</p>
+                    </template>
+                  </div>
+
+                  <div class="mt-2 flex items-center gap-3 px-1 text-xs text-text-secondary" :class="message.senderId === user?.id ? 'justify-end' : ''">
+                    <span>{{ formatMessageTime(message.createdAt) }}</span>
+                    <button
+                      v-if="message.canRecall"
+                      type="button"
+                      class="inline-flex items-center gap-1 hover:text-text-primary"
+                      :disabled="recallingId === message.id"
+                      @click="recallMessage(message.id)"
+                    >
+                      <Undo2 :size="12" />
+                      {{ recallingId === message.id ? '撤回中' : '撤回' }}
+                    </button>
+                    <span v-else-if="message.recalled" class="inline-flex items-center gap-1">
+                      <Undo2 :size="12" />
+                      已撤回
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -283,91 +326,91 @@ const appendQuickEmoji = (value: string) => {
       </div>
 
       <div class="border-t border-border bg-bg-primary px-4 py-3">
-        <div class="mx-auto max-w-4xl">
-          <div class="mb-3 flex flex-wrap gap-2">
+        <div class="mx-auto max-w-4xl rounded-[28px] border border-border bg-bg-primary shadow-sm">
+          <div class="flex items-center gap-2 border-b border-border px-4 py-3">
             <button
-              v-for="item in quickEmojis"
-              :key="item"
               type="button"
-              class="rounded-full border border-border bg-bg-primary px-4 py-2 text-sm text-text-secondary hover:bg-bg-secondary"
-              @click="appendQuickEmoji(item)"
+              class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border hover:bg-bg-secondary disabled:opacity-60"
+              :disabled="!canSend || uploadingAttachment"
+              @click="emojiOpen = !emojiOpen"
             >
-              {{ item }}
+              <SmilePlus :size="18" />
             </button>
+            <button
+              type="button"
+              class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border hover:bg-bg-secondary disabled:opacity-60"
+              :disabled="!canSend || uploadingAttachment"
+              @click="handleAttachmentClick"
+            >
+              <ImagePlus :size="18" />
+            </button>
+            <button
+              type="button"
+              class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border hover:bg-bg-secondary disabled:opacity-60"
+              :disabled="!canSend || uploadingAttachment"
+              @click="handleAttachmentClick"
+            >
+              <FileUp :size="18" />
+            </button>
+            <input ref="attachmentInput" type="file" class="hidden" :accept="attachmentAccept" @change="handleAttachmentSelected" />
           </div>
 
-          <div class="rounded-[28px] border border-border bg-bg-primary px-4 py-3 shadow-sm">
-            <div v-if="!detail.canSend" class="mb-3 rounded-2xl border border-border bg-bg-secondary px-4 py-3 text-sm text-text-secondary">
-              {{ detail.restrictionReason }}
-            </div>
-
-            <textarea
-              v-model="composing"
-              rows="2"
-              maxlength="2000"
-              placeholder="发送消息"
-              class="min-h-[64px] w-full resize-none bg-transparent text-[15px] outline-none disabled:bg-bg-secondary"
-              :disabled="!detail.canSend || sending || uploadingAttachment"
-              @keydown.enter.exact.prevent="handleSend"
-            />
-
-            <div class="mt-3 flex items-center justify-between gap-3">
-              <div class="relative flex items-center gap-2">
-                <button
-                  type="button"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border hover:bg-bg-secondary disabled:opacity-60"
-                  :disabled="!detail.canSend || uploadingAttachment"
-                  @click="handleAttachmentClick"
-                >
-                  <Paperclip :size="18" />
-                </button>
-                <input ref="attachmentInput" type="file" class="hidden" :accept="attachmentAccept" @change="handleAttachmentSelected" />
-
-                <button
-                  type="button"
-                  class="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border hover:bg-bg-secondary disabled:opacity-60"
-                  :disabled="!detail.canSend"
-                  @click="emojiOpen = !emojiOpen"
-                >
-                  <SmilePlus :size="18" />
-                </button>
-
-                <div
-                  v-if="emojiOpen"
-                  class="absolute bottom-14 left-0 z-20 w-72 rounded-3xl border border-border bg-bg-primary p-4 shadow-lg"
-                >
-                  <div class="mb-3 flex items-center justify-between">
-                    <p class="text-sm font-bold">选择表情</p>
-                    <button type="button" class="rounded-full p-1 hover:bg-bg-secondary" @click="emojiOpen = false">
-                      <X :size="14" />
-                    </button>
-                  </div>
-                  <div class="grid grid-cols-6 gap-2">
-                    <button
-                      v-for="emoji in emojiPalette"
-                      :key="emoji"
-                      type="button"
-                      class="rounded-2xl border border-border px-2 py-2 text-xl hover:bg-bg-secondary"
-                      @click="insertEmoji(emoji)"
-                    >
-                      {{ emoji }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-text-primary text-bg-primary shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                :disabled="!detail.canSend || !composing.trim() || sending || uploadingAttachment"
-                @click="handleSend"
-              >
-                <Send :size="18" />
+          <div
+            v-if="emojiOpen"
+            class="border-b border-border p-4"
+          >
+            <div class="mb-3 flex items-center justify-between">
+              <p class="text-sm font-bold">选择表情</p>
+              <button type="button" class="rounded-full p-1 hover:bg-bg-secondary" @click="emojiOpen = false">
+                <X :size="14" />
               </button>
             </div>
+            <div class="grid grid-cols-7 gap-2">
+              <button
+                v-for="emoji in emojiPalette"
+                :key="emoji"
+                type="button"
+                class="rounded-2xl border border-border px-2 py-2 text-xl hover:bg-bg-secondary"
+                @click="insertEmoji(emoji)"
+              >
+                {{ emoji }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="!canSend" class="border-b border-border px-4 py-3 text-sm text-text-secondary">
+            {{ detail.restrictionReason }}
+          </div>
+
+          <div class="flex items-end gap-3 px-4 py-4">
+            <textarea
+              v-model="composing"
+              rows="3"
+              maxlength="2000"
+              placeholder="发送消息"
+              class="min-h-[96px] flex-1 resize-none bg-transparent text-[15px] outline-none disabled:bg-bg-secondary"
+              :disabled="!canSend || sending || uploadingAttachment"
+              @keydown.enter.exact.prevent="handleSend"
+            />
+            <button
+              type="button"
+              class="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-text-primary text-bg-primary shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!canSend || !composing.trim() || sending || uploadingAttachment"
+              @click="handleSend"
+            >
+              <Send :size="18" />
+            </button>
           </div>
         </div>
       </div>
     </template>
+
+    <ImageLightbox
+      :open="previewImages.length > 0"
+      :images="previewImages"
+      :index="previewIndex"
+      @close="previewImages = []"
+      @update:index="previewIndex = $event"
+    />
   </div>
 </template>
