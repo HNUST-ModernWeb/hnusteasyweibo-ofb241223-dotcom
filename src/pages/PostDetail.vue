@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { postService, commentService } from '../api/services';
 import { Post, Comment as CommentType } from '../types';
 import PostCard from '../components/PostCard.vue';
-import { ArrowLeft, Send } from 'lucide-vue-next';
+import { ArrowLeft, Image as ImageIcon, Send, SmilePlus, X } from 'lucide-vue-next';
 import { useAuth } from '../composables/useAuth';
 import { useToast } from '../composables/useToast';
 import { formatDistanceToNow } from 'date-fns';
@@ -17,8 +17,11 @@ const post = ref<Post | null>(null);
 const comments = ref<CommentType[]>([]);
 const loading = ref(true);
 const newComment = ref('');
+const emojiOpen = ref(false);
+const commentImages = ref<Array<{ file: File; previewUrl: string }>>([]);
 const { user, isAuthenticated } = useAuth();
 const { showToast } = useToast();
+const emojiPalette = ['😀', '😂', '🥳', '👍', '👏', '🔥', '✨', '🎉', '❤️', '🙏', '🤝', '📚', '💻', '😄', '😮', '🥲', '😎', '👀'];
 
 const loadData = async () => {
   loading.value = true;
@@ -38,14 +41,35 @@ const loadData = async () => {
 onMounted(loadData);
 
 const handleAddComment = async () => {
-  if (!newComment.value.trim() || !user.value || !post.value) return;
+  if ((!newComment.value.trim() && commentImages.value.length === 0) || !user.value || !post.value) return;
   try {
-    await commentService.addComment(post.value.id, newComment.value);
+    await commentService.addComment(post.value.id, newComment.value, commentImages.value.map((item) => item.file));
     newComment.value = '';
+    emojiOpen.value = false;
+    commentImages.value = [];
     await loadData();
   } catch (error) {
     showToast(error instanceof Error ? error.message : '评论失败，请稍后重试', 'error');
   }
+};
+
+const insertEmoji = (emoji: string) => {
+  newComment.value += emoji;
+};
+
+const handleImageUpload = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  Array.from(target.files || []).forEach((file) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      commentImages.value.push({
+        file,
+        previewUrl: reader.result as string,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+  target.value = '';
 };
 </script>
 
@@ -67,23 +91,81 @@ const handleAddComment = async () => {
 
     <PostCard :post="post" @update="loadData" @deleted="router.push('/')" />
 
-    <div v-if="isAuthenticated" class="p-4 border-b border-border flex gap-4">
-      <img :src="user?.avatar" :alt="user?.nickname" class="w-10 h-10 rounded-full object-cover" />
-      <div class="flex-1 flex gap-2">
-        <input 
-          v-model="newComment"
-          @keydown.enter="handleAddComment"
-          type="text" 
-          placeholder="发布你的回复" 
-          class="flex-1 bg-transparent text-lg outline-none"
-        />
-        <button 
-          @click="handleAddComment"
-          :disabled="!newComment.trim()"
-          class="bg-brand text-bg-primary px-4 py-1 rounded-full font-bold disabled:opacity-50"
-        >
-          回复
-        </button>
+    <div v-if="isAuthenticated" class="border-b border-border p-4">
+      <div class="rounded-[28px] border border-border bg-bg-primary p-4 shadow-sm">
+        <div class="flex items-start gap-4">
+          <img :src="user?.avatar" :alt="user?.nickname" class="mt-1 h-12 w-12 rounded-full object-cover" />
+          <div class="min-w-0 flex-1">
+            <textarea
+              v-model="newComment"
+              rows="3"
+              maxlength="1000"
+              placeholder="发布你的回复"
+              class="min-h-[96px] w-full resize-none bg-transparent text-lg outline-none"
+              @keydown.enter.exact.prevent="handleAddComment"
+            ></textarea>
+
+            <div v-if="commentImages.length > 0" class="mt-4 flex gap-2 overflow-x-auto pb-2">
+              <div v-for="(img, index) in commentImages" :key="`${img.file.name}-${index}`" class="relative shrink-0">
+                <img :src="img.previewUrl" class="h-24 w-24 rounded-2xl object-cover" />
+                <button
+                  type="button"
+                  class="absolute right-1 top-1 rounded-full bg-black/60 px-2 py-1 text-xs text-white hover:bg-black/80"
+                  @click="commentImages.splice(index, 1)"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 flex items-center justify-between gap-3">
+              <div class="relative flex items-center gap-2">
+                <label class="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-border hover:bg-bg-secondary">
+                  <ImageIcon :size="18" />
+                  <input type="file" class="hidden" accept="image/*" multiple @change="handleImageUpload" />
+                </label>
+                <button
+                  type="button"
+                  class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-border hover:bg-bg-secondary"
+                  @click="emojiOpen = !emojiOpen"
+                >
+                  <SmilePlus :size="18" />
+                </button>
+
+                <div
+                  v-if="emojiOpen"
+                  class="absolute bottom-14 left-0 z-10 w-72 rounded-3xl border border-border bg-bg-primary p-4 shadow-lg"
+                >
+                  <div class="mb-3 flex items-center justify-between">
+                    <p class="text-sm font-bold">选择表情</p>
+                    <button type="button" class="rounded-full p-1 hover:bg-bg-secondary" @click="emojiOpen = false">
+                      <X :size="14" />
+                    </button>
+                  </div>
+                  <div class="grid grid-cols-6 gap-2">
+                    <button
+                      v-for="emoji in emojiPalette"
+                      :key="emoji"
+                      type="button"
+                      class="rounded-2xl border border-border px-2 py-2 text-xl hover:bg-bg-secondary"
+                      @click="insertEmoji(emoji)"
+                    >
+                      {{ emoji }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                @click="handleAddComment"
+                :disabled="!newComment.trim() && commentImages.length === 0"
+                class="rounded-full bg-text-primary px-6 py-3 font-bold text-bg-primary hover:opacity-90 disabled:opacity-50"
+              >
+                回复
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div v-else class="p-6 text-center border-b border-border">
@@ -111,6 +193,16 @@ const handleAddComment = async () => {
             </span>
           </div>
           <p class="mt-1 text-[15px]">{{ comment.content }}</p>
+          <div v-if="comment.images?.length" class="mt-3 flex flex-wrap gap-2">
+            <img
+              v-for="(image, index) in comment.images"
+              :key="`${comment.id}-${index}`"
+              :src="image"
+              alt="Comment image"
+              loading="lazy"
+              class="h-24 w-24 rounded-2xl object-cover"
+            />
+          </div>
         </div>
       </div>
     </div>

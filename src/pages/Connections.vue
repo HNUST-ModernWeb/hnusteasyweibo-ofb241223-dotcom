@@ -2,9 +2,10 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ArrowLeft, MessageCircle, Search, UserPlus } from 'lucide-vue-next';
-import { chatService, userService } from '../api/services';
+import { chatService, notificationService, userService } from '../api/services';
 import { useAuth } from '../composables/useAuth';
 import { useToast } from '../composables/useToast';
+import { refreshUnreadCount } from '../composables/useNotifications';
 import type { RelationshipTab, User } from '../types';
 
 const route = useRoute();
@@ -23,6 +24,7 @@ const members = ref<User[]>([]);
 const loading = ref(true);
 const query = ref('');
 const busyUserId = ref<string | null>(null);
+const hasUnreadFollowerEvents = ref(false);
 
 const normalizeTab = (value: unknown): RelationshipTab => (
   value === 'followers' || value === 'mutual' ? value : 'following'
@@ -42,8 +44,35 @@ const loadMembers = async () => {
   }
 };
 
+const loadFollowerIndicator = async () => {
+  try {
+    const notifications = await notificationService.getUnreadFollowNotifications();
+    hasUnreadFollowerEvents.value = notifications.length > 0;
+  } catch {
+    hasUnreadFollowerEvents.value = false;
+  }
+};
+
+const clearFollowerIndicator = async () => {
+  try {
+    const notifications = await notificationService.getUnreadFollowNotifications();
+    if (notifications.length > 0) {
+      await Promise.all(notifications.map((item) => notificationService.markAsRead(item.id)));
+      await refreshUnreadCount();
+    }
+  } catch {
+    // Ignore unread indicator cleanup failures for this local UI hint.
+  } finally {
+    hasUnreadFollowerEvents.value = false;
+  }
+};
+
 onMounted(async () => {
   activeTab.value = normalizeTab(route.query.tab);
+  await loadFollowerIndicator();
+  if (activeTab.value === 'followers') {
+    await clearFollowerIndicator();
+  }
   await loadMembers();
 });
 
@@ -55,6 +84,9 @@ watch(
       return;
     }
     activeTab.value = next;
+    if (next === 'followers') {
+      await clearFollowerIndicator();
+    }
     await loadMembers();
   },
 );
@@ -72,6 +104,9 @@ const filteredMembers = computed(() => {
 const setTab = async (tab: RelationshipTab) => {
   activeTab.value = tab;
   await router.replace({ path: '/connections', query: tab === 'following' ? {} : { tab } });
+  if (tab === 'followers') {
+    await clearFollowerIndicator();
+  }
   await loadMembers();
 };
 
@@ -90,7 +125,7 @@ const handleFollow = async (target: User) => {
 const startChat = async (target: User) => {
   try {
     const conversation = await chatService.createConversation(target.id);
-    await router.push(`/chat?conversation=${conversation.id}`);
+    await router.push(`/chat/${conversation.id}`);
   } catch (error) {
     showToast(error instanceof Error ? error.message : '创建会话失败，请稍后重试', 'error');
   }
@@ -110,16 +145,20 @@ const startChat = async (target: User) => {
     </div>
 
     <div class="space-y-4 px-4 py-5">
-      <div class="flex flex-wrap gap-2">
+      <div class="grid grid-cols-3 border-b border-border">
         <button
           v-for="tab in tabs"
           :key="tab.key"
           type="button"
-          class="rounded-full border px-4 py-2 text-sm font-medium transition-colors"
-          :class="activeTab === tab.key ? 'border-text-primary bg-text-primary text-bg-primary' : 'border-border hover:bg-bg-secondary'"
+          class="relative border-b-2 border-transparent px-4 py-4 text-base font-bold transition-colors"
+          :class="activeTab === tab.key ? 'border-text-primary text-text-primary' : 'text-text-secondary hover:bg-bg-secondary/50'"
           @click="setTab(tab.key)"
         >
           {{ tab.label }}
+          <span
+            v-if="tab.key === 'followers' && hasUnreadFollowerEvents"
+            class="absolute right-6 top-3 h-2.5 w-2.5 rounded-full bg-red-500"
+          />
         </button>
       </div>
 
@@ -148,16 +187,16 @@ const startChat = async (target: User) => {
           class="rounded-[28px] border border-border bg-bg-primary p-4 shadow-sm"
         >
           <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div class="flex min-w-0 items-center gap-4">
+            <button type="button" class="flex min-w-0 items-center gap-4 text-left" @click="router.push(`/profile/${member.username}`)">
               <img :src="member.avatar" :alt="member.nickname" class="h-14 w-14 rounded-full object-cover" />
               <div class="min-w-0">
-                <button type="button" class="truncate text-left text-lg font-bold hover:underline" @click="router.push(`/profile/${member.username}`)">
+                <span class="truncate text-left text-lg font-bold hover:underline">
                   {{ member.nickname }}
-                </button>
+                </span>
                 <p class="truncate text-sm text-text-secondary">@{{ member.username }}</p>
                 <p class="mt-1 text-sm text-text-secondary">{{ member.bio || '这个用户还没有填写简介。' }}</p>
               </div>
-            </div>
+            </button>
 
             <div class="flex flex-wrap items-center gap-2">
               <button

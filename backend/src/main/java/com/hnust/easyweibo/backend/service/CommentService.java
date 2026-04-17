@@ -15,7 +15,9 @@ import org.springframework.http.HttpStatus;
 import com.hnust.easyweibo.backend.domain.dto.comment.CommentResponse;
 import com.hnust.easyweibo.backend.domain.dto.comment.CreateCommentRequest;
 import com.hnust.easyweibo.backend.domain.entity.CommentEntity;
+import com.hnust.easyweibo.backend.domain.entity.CommentImageEntity;
 import com.hnust.easyweibo.backend.exception.ApiException;
+import com.hnust.easyweibo.backend.mapper.CommentImageMapper;
 import com.hnust.easyweibo.backend.mapper.CommentMapper;
 import com.hnust.easyweibo.backend.mapper.PostMapper;
 
@@ -24,8 +26,10 @@ public class CommentService {
 
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([A-Za-z0-9_]+)");
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+    private static final int MAX_COMMENT_IMAGES = 4;
 
     private final CommentMapper commentMapper;
+    private final CommentImageMapper commentImageMapper;
     private final PostMapper postMapper;
     private final UserService userService;
     private final PostService postService;
@@ -33,12 +37,14 @@ public class CommentService {
 
     public CommentService(
         CommentMapper commentMapper,
+        CommentImageMapper commentImageMapper,
         PostMapper postMapper,
         UserService userService,
         PostService postService,
         NotificationService notificationService
     ) {
         this.commentMapper = commentMapper;
+        this.commentImageMapper = commentImageMapper;
         this.postMapper = postMapper;
         this.userService = userService;
         this.postService = postService;
@@ -65,14 +71,35 @@ public class CommentService {
         userService.assertCanCreateContent(authorId);
         var post = postMapper.findById(postId);
         postService.getById(postId, authorId);
-        String content = request.content().trim();
+        String content = request.content() == null ? "" : request.content().trim();
+        List<String> imageUrls = request.imageUrls() == null
+            ? Collections.emptyList()
+            : request.imageUrls().stream()
+                .filter(url -> url != null && !url.isBlank())
+                .map(String::trim)
+                .toList();
+        if (content.isBlank() && imageUrls.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "回复内容和图片不能同时为空");
+        }
+        if (content.length() > 500) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "评论内容不能超过 500 个字符");
+        }
+        if (imageUrls.size() > MAX_COMMENT_IMAGES) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "单条回复最多上传 4 张图片");
+        }
         CommentEntity comment = new CommentEntity();
         comment.setPostId(postId);
         comment.setAuthorId(authorId);
-        comment.setContent(content);
+        comment.setContent(content.isBlank() ? null : content);
         comment.setLikesCount(0);
         comment.setCreatedAt(LocalDateTime.now());
         commentMapper.insert(comment);
+        for (String imageUrl : imageUrls) {
+            CommentImageEntity image = new CommentImageEntity();
+            image.setCommentId(comment.getId());
+            image.setImageUrl(imageUrl);
+            commentImageMapper.insert(image);
+        }
         postMapper.incrementCommentCount(postId);
         if (post != null) {
             notificationService.createCommentNotification(authorId, post.getAuthorId(), postId);
@@ -104,7 +131,10 @@ public class CommentService {
             String.valueOf(comment.getPostId()),
             String.valueOf(comment.getAuthorId()),
             userService.getById(comment.getAuthorId(), viewerId),
-            comment.getContent(),
+            comment.getContent() == null ? "" : comment.getContent(),
+            commentImageMapper.findByCommentId(comment.getId()).stream()
+                .map(CommentImageEntity::getImageUrl)
+                .toList(),
             comment.getCreatedAt().format(TIME_FORMATTER),
             comment.getLikesCount(),
             false

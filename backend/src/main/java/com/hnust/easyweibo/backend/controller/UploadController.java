@@ -31,4 +31,13 @@ public class UploadController {
         authService.requireUserId(authorization);
         return uploadService.uploadImage(file);
     }
+
+    @PostMapping("/files")
+    public UploadResponse uploadFile(
+        @RequestParam("file") MultipartFile file,
+        @RequestHeader("Authorization") String authorization
+    ) {
+        authService.requireUserId(authorization);
+        return uploadService.uploadChatAttachment(file);
+    }
 }

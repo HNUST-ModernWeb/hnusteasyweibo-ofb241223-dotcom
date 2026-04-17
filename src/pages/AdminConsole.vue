@@ -58,8 +58,7 @@ const loadingTab = ref(false);
 const refreshingOverview = ref(false);
 
 const userQuery = ref('');
-const userStatusFilter = ref('');
-const userMuteFilter = ref('');
+const userFilter = ref('');
 const postQuery = ref('');
 const postStatusFilter = ref('');
 const commentQuery = ref('');
@@ -169,7 +168,14 @@ const loadOverview = async () => {
 };
 
 const loadUsers = async () => {
-  users.value = await adminService.getUsers(userQuery.value, userStatusFilter.value, userMuteFilter.value);
+  let status = '';
+  let muteStatus = '';
+  if (userFilter.value.startsWith('status:')) {
+    status = userFilter.value.slice('status:'.length);
+  } else if (userFilter.value.startsWith('mute:')) {
+    muteStatus = userFilter.value.slice('mute:'.length);
+  }
+  users.value = await adminService.getUsers(userQuery.value, status, muteStatus);
 };
 
 const loadPosts = async () => {
@@ -206,6 +212,18 @@ const loadActiveTab = async () => {
 const refreshDashboard = async () => {
   await loadOverview();
   await loadActiveTab();
+};
+
+const openPostDetail = (postId: string) => {
+  router.push(`/post/${postId}`);
+};
+
+const openUserProfile = (username: string) => {
+  router.push(`/profile/${username}`);
+};
+
+const openCommentThread = (postId: string) => {
+  router.push(`/post/${postId}`);
 };
 
 const openDialog = (config: ModerationDialog) => {
@@ -405,15 +423,15 @@ watch(
     </div>
 
     <div class="space-y-6 p-4 sm:p-6">
-      <div class="flex flex-wrap gap-2">
+      <div class="grid grid-cols-5 border-b border-border">
         <button
           v-for="tab in tabs"
           :key="tab.key"
           type="button"
-          class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors"
+          class="inline-flex min-w-0 items-center justify-center gap-2 border-b-2 border-transparent px-4 py-4 text-base font-bold transition-colors"
           :class="activeTab === tab.key
-            ? 'border-text-primary bg-text-primary text-bg-primary'
-            : 'border-border bg-bg-primary hover:bg-bg-secondary'"
+            ? 'border-text-primary text-text-primary'
+            : 'text-text-secondary hover:bg-bg-secondary/50'"
           @click="setActiveTab(tab.key)"
         >
           <component :is="tab.icon" :size="16" />
@@ -426,7 +444,7 @@ watch(
       </div>
 
       <template v-else>
-        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           <button
             v-for="card in cardItems"
             :key="card.key"
@@ -464,37 +482,30 @@ watch(
             </div>
 
             <div class="mt-5 space-y-3">
-              <div
+              <button
                 v-for="post in recentPosts"
                 :key="post.id"
-                class="rounded-3xl border border-border p-4"
+                type="button"
+                class="w-full rounded-3xl border border-border p-4 text-left transition hover:bg-bg-secondary/40"
+                @click="openPostDetail(post.id)"
               >
-                <div class="flex items-start justify-between gap-4">
-                  <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <span class="font-bold">{{ post.author.nickname }}</span>
-                      <span class="text-sm text-text-secondary">@{{ post.author.username }}</span>
-                      <span
-                        class="inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset"
-                        :class="statusBadgeClass(post.status)"
-                      >
-                        {{ post.status }}
-                      </span>
-                    </div>
-                    <p class="mt-2 break-words text-sm leading-6">{{ postExcerpt(post.content, 110) }}</p>
-                    <p class="mt-3 text-xs text-text-secondary">
-                      {{ formatTime(post.createdAt) }} · {{ formatMetric(post.viewsCount) }} 浏览
-                    </p>
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-bold">{{ post.author.nickname }}</span>
+                    <span class="text-sm text-text-secondary">@{{ post.author.username }}</span>
+                    <span
+                      class="inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset"
+                      :class="statusBadgeClass(post.status)"
+                    >
+                      {{ post.status }}
+                    </span>
                   </div>
-                  <button
-                    type="button"
-                    class="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-bg-secondary"
-                    @click="setActiveTab('posts')"
-                  >
-                    管理
-                  </button>
+                  <p class="mt-2 break-words text-sm leading-6">{{ postExcerpt(post.content, 110) }}</p>
+                  <p class="mt-3 text-xs text-text-secondary">
+                    {{ formatTime(post.createdAt) }} · {{ formatMetric(post.viewsCount) }} 浏览
+                  </p>
                 </div>
-              </div>
+              </button>
               <div v-if="recentPosts.length === 0" class="rounded-3xl border border-dashed border-border p-6 text-sm text-text-secondary">
                 暂无最近帖子。
               </div>
@@ -575,7 +586,7 @@ watch(
           </div>
 
           <div v-if="activeTab === 'users'" class="mt-5 space-y-4">
-            <div class="grid gap-3 md:grid-cols-[1.2fr,0.7fr,0.7fr,auto]">
+            <div class="grid gap-3 md:grid-cols-[1.4fr,1fr,auto]">
               <label class="relative">
                 <Search class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-text-secondary" :size="16" />
                 <input
@@ -586,15 +597,12 @@ watch(
                   @keyup.enter="handleSearch"
                 />
               </label>
-              <select v-model="userStatusFilter" class="rounded-full border border-border bg-bg-primary px-4 py-3 outline-none transition focus:border-text-primary" @change="handleSearch">
-                <option value="">全部账号状态</option>
-                <option value="ACTIVE">正常</option>
-                <option value="BANNED">已封禁</option>
-              </select>
-              <select v-model="userMuteFilter" class="rounded-full border border-border bg-bg-primary px-4 py-3 outline-none transition focus:border-text-primary" @change="handleSearch">
-                <option value="">全部发言状态</option>
-                <option value="NORMAL">正常</option>
-                <option value="MUTED">已禁言</option>
+              <select v-model="userFilter" class="rounded-full border border-border bg-bg-primary px-4 py-3 outline-none transition focus:border-text-primary" @change="handleSearch">
+                <option value="">全部筛选条件</option>
+                <option value="status:ACTIVE">账号正常</option>
+                <option value="status:BANNED">已封禁</option>
+                <option value="mute:NORMAL">可发言</option>
+                <option value="mute:MUTED">已禁言</option>
               </select>
               <button type="button" class="rounded-full bg-text-primary px-5 py-3 font-bold text-bg-primary hover:opacity-90" @click="handleSearch">
                 查询
@@ -608,16 +616,16 @@ watch(
               <div
                 v-for="member in users"
                 :key="member.id"
-                class="rounded-3xl border border-border p-4"
+                class="rounded-3xl border border-border p-4 transition hover:bg-bg-secondary/30"
               >
                 <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                  <div class="flex min-w-0 items-center gap-4">
+                  <button type="button" class="flex min-w-0 flex-1 items-center gap-4 text-left" @click="openUserProfile(member.username)">
                     <img :src="member.avatar" :alt="member.nickname" class="h-12 w-12 rounded-full object-cover" />
                     <div class="min-w-0">
                       <div class="flex flex-wrap items-center gap-2">
-                        <button type="button" class="truncate font-bold hover:underline" @click="router.push(`/profile/${member.username}`)">
+                        <span class="truncate font-bold hover:underline">
                           {{ member.nickname }}
-                        </button>
+                        </span>
                         <span class="truncate text-sm text-text-secondary">@{{ member.username }}</span>
                         <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset" :class="statusBadgeClass(member.status)">
                           {{ member.status }}
@@ -632,7 +640,7 @@ watch(
                         注册于 {{ formatTime(member.createdAt) }} · {{ member.followersCount }} 粉丝 · {{ member.followingCount }} 正在关注
                       </p>
                     </div>
-                  </div>
+                  </button>
 
                   <div class="flex flex-wrap gap-2">
                     <button
@@ -696,14 +704,14 @@ watch(
               <div
                 v-for="post in posts"
                 :key="post.id"
-                class="rounded-3xl border border-border p-4"
+                class="rounded-3xl border border-border p-4 transition hover:bg-bg-secondary/30"
               >
                 <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div class="min-w-0">
+                  <button type="button" class="min-w-0 flex-1 text-left" @click="openPostDetail(post.id)">
                     <div class="flex flex-wrap items-center gap-2">
-                      <button type="button" class="font-bold hover:underline" @click="router.push(`/profile/${post.author.username}`)">
+                      <span class="font-bold hover:underline">
                         {{ post.author.nickname }}
-                      </button>
+                      </span>
                       <span class="text-sm text-text-secondary">@{{ post.author.username }}</span>
                       <span class="inline-flex rounded-full px-2 py-1 text-xs font-semibold ring-1 ring-inset" :class="statusBadgeClass(post.status)">
                         {{ post.status }}
@@ -713,7 +721,7 @@ watch(
                     <p class="mt-3 text-xs text-text-secondary">
                       {{ formatTime(post.createdAt) }} · {{ formatMetric(post.viewsCount) }} 浏览 · {{ formatMetric(post.likesCount) }} 赞 · {{ formatMetric(post.commentsCount) }} 评论 · {{ formatMetric(post.repostsCount) }} 转发
                     </p>
-                  </div>
+                  </button>
                   <div class="flex flex-wrap gap-2">
                     <button
                       v-if="post.status === 'ACTIVE'"
@@ -730,14 +738,6 @@ watch(
                       @click="openDeletePostDialog(post)"
                     >
                       删除
-                    </button>
-                    <button
-                      v-if="post.status === 'ACTIVE'"
-                      type="button"
-                      class="rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-bg-secondary"
-                      @click="router.push(`/post/${post.id}`)"
-                    >
-                      查看详情
                     </button>
                   </div>
                 </div>
@@ -772,22 +772,22 @@ watch(
               <div
                 v-for="comment in comments"
                 :key="comment.id"
-                class="rounded-3xl border border-border p-4"
+                class="rounded-3xl border border-border p-4 transition hover:bg-bg-secondary/30"
               >
                 <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div class="min-w-0">
+                  <button type="button" class="min-w-0 flex-1 text-left" @click="openCommentThread(comment.postId)">
                     <div class="flex flex-wrap items-center gap-2">
-                      <button type="button" class="font-bold hover:underline" @click="router.push(`/profile/${comment.author.username}`)">
+                      <span class="font-bold hover:underline">
                         {{ comment.author.nickname }}
-                      </button>
+                      </span>
                       <span class="text-sm text-text-secondary">@{{ comment.author.username }}</span>
                     </div>
                     <p class="mt-2 break-words text-sm leading-6">{{ comment.content }}</p>
                     <p class="mt-3 text-xs text-text-secondary">{{ formatTime(comment.createdAt) }}</p>
-                  </div>
+                  </button>
                   <button
                     type="button"
-                    class="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-500/20 dark:hover:bg-red-500/10"
+                    class="shrink-0 rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-500/20 dark:hover:bg-red-500/10"
                     @click="openDeleteCommentDialog(comment)"
                   >
                     <span class="inline-flex items-center gap-2">
@@ -840,7 +840,12 @@ watch(
                     <p v-if="report.details" class="mt-2 break-words text-sm leading-6">
                       {{ report.details }}
                     </p>
-                    <div v-if="report.post" class="mt-3 rounded-2xl bg-bg-secondary px-4 py-3">
+                    <button
+                      v-if="report.post"
+                      type="button"
+                      class="mt-3 block w-full rounded-2xl bg-bg-secondary px-4 py-3 text-left transition hover:bg-bg-secondary/70"
+                      @click="openPostDetail(report.post.id)"
+                    >
                       <p class="text-xs text-text-secondary">
                         帖子状态：
                         <span class="font-semibold text-text-primary">{{ report.post.status }}</span>
@@ -849,28 +854,26 @@ watch(
                       <p class="mt-2 text-xs text-text-secondary">
                         作者：{{ report.post.author.nickname }} · {{ formatTime(report.post.createdAt) }}
                       </p>
-                    </div>
+                    </button>
                     <p v-if="report.resolvedBy" class="mt-3 text-xs text-text-secondary">
                       处理人：{{ report.resolvedBy.nickname }} · {{ formatTime(report.resolvedAt) }}
                     </p>
                   </div>
 
-                  <div class="flex flex-wrap gap-2">
+                  <div class="flex shrink-0 flex-col items-stretch gap-2 xl:w-44">
                     <button
                       v-if="report.status === 'OPEN'"
                       type="button"
-                      class="rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-bg-secondary"
+                      class="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-bg-secondary"
                       @click="handleResolveReport(report.id)"
                     >
-                      <span class="inline-flex items-center gap-2">
-                        <CheckCircle2 :size="16" />
-                        标记处理
-                      </span>
+                      <CheckCircle2 :size="16" />
+                      标记处理
                     </button>
                     <button
                       v-if="report.status === 'OPEN' && report.post && report.post.status === 'ACTIVE'"
                       type="button"
-                      class="rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-bg-secondary"
+                      class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-bg-secondary"
                       @click="openWithdrawDialog(report.post)"
                     >
                       撤回帖子
@@ -878,7 +881,7 @@ watch(
                     <button
                       v-if="report.status === 'OPEN' && report.post && report.post.status !== 'DELETED'"
                       type="button"
-                      class="rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-500/20 dark:hover:bg-red-500/10"
+                      class="inline-flex w-full items-center justify-center whitespace-nowrap rounded-full border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-500/20 dark:hover:bg-red-500/10"
                       @click="openDeletePostDialog(report.post)"
                     >
                       删除帖子

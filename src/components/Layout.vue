@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { useRoute } from 'vue-router';
 import Sidebar from './Sidebar.vue';
 import RightPanel from './RightPanel.vue';
 import Navbar from './Navbar.vue';
+
+const route = useRoute();
 </script>
 
 <template>
@@ -15,7 +18,7 @@ import Navbar from './Navbar.vue';
 
       <!-- Main Content -->
       <main class="flex-1 max-w-[920px] min-h-screen border-r border-border pb-20 md:pb-0">
-        <router-view />
+        <router-view :key="route.fullPath" />
       </main>
 
       <!-- Right Panel -->

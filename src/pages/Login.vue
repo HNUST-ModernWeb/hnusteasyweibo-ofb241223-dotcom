@@ -39,7 +39,7 @@ const onSubmit = async ({ username, password }: { username: string; password: st
       router.push('/');
     }, 1000);
   } catch (error) {
-    loginRef.value?.setError(error instanceof Error ? error.message : '用户名或密码错误，可试用 admin / johndoe / janedoe + password123');
+    loginRef.value?.setError(error instanceof Error ? error.message : '用户名或密码错误，可试用 johndoe / janedoe + password123');
     showToast(error instanceof Error ? error.message : '登录失败，请检查用户名和密码', 'error');
   }
 

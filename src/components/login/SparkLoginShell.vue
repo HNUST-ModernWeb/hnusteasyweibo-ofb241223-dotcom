@@ -30,8 +30,8 @@ const emit = defineEmits<{
 
 const mode = ref<'login' | 'register' | 'reset'>('login');
 const nickname = ref('');
-const username = ref('admin');
-const password = ref('password123');
+const username = ref('');
+const password = ref('');
 const confirmPassword = ref('');
 const remember = ref(false);
 const showPassword = ref(false);
@@ -124,14 +124,10 @@ function switchMode(nextMode: 'login' | 'register' | 'reset') {
   clearBanners();
   resetErrorState();
   loading.value = false;
-  password.value = nextMode === 'login' ? 'password123' : '';
+  password.value = '';
   confirmPassword.value = '';
-  if (nextMode === 'register' || nextMode === 'reset') {
-    nickname.value = '';
-    username.value = '';
-  } else {
-    username.value = username.value || 'admin';
-  }
+  nickname.value = '';
+  username.value = '';
 }
 
 function onSubmit() {
@@ -259,7 +255,7 @@ defineExpose({
                 v-model.trim="username"
                 type="text"
                 maxlength="24"
-                :placeholder="isRegisterMode ? '3-24 个字符，可使用字母数字下划线' : isResetMode ? '请输入需要重置的用户名' : 'admin / johndoe / janedoe'"
+                :placeholder="isRegisterMode ? '3-24 个字符，可使用字母数字下划线' : isResetMode ? '请输入需要重置的用户名' : '请输入用户名'"
                 autocomplete="username"
                 @focus="focusedField = 'username'; isTyping = true"
                 @blur="focusedField = 'none'; isTyping = false"

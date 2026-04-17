@@ -14,16 +14,23 @@ const { unreadCount } = useNotifications();
 const { theme, toggleTheme } = useTheme();
 
 const navItems = computed(() => [
-  { icon: HomeFilledIcon, label: '首页', path: '/' },
-  { icon: Search, label: '发现', path: '/search' },
-  { icon: Hash, label: '话题', path: '/topics' },
-  { icon: Bell, label: '通知', path: '/notifications' },
-  { icon: User, label: '个人主页', path: user.value ? `/profile/${user.value.username}` : '/login' },
-  { icon: UserRoundPlus, label: '关注列表', path: '/connections' },
-  { icon: MessageCircle, label: '聊天', path: '/chat' },
-  ...(user.value?.role === 'ADMIN' ? [{ icon: LayoutDashboard, label: '控制台', path: '/admin' }] : []),
-  { icon: Settings, label: '设置', path: '/settings' },
+  { icon: HomeFilledIcon, label: '首页', path: '/', matchPrefix: '/' },
+  { icon: Search, label: '发现', path: '/search', matchPrefix: '/search' },
+  { icon: Hash, label: '话题', path: '/topics', matchPrefix: '/topics' },
+  { icon: Bell, label: '通知', path: '/notifications', matchPrefix: '/notifications' },
+  { icon: User, label: '个人主页', path: user.value ? `/profile/${user.value.username}` : '/login', matchPrefix: '/profile' },
+  { icon: UserRoundPlus, label: '关注列表', path: '/connections', matchPrefix: '/connections' },
+  { icon: MessageCircle, label: '聊天', path: '/chat', matchPrefix: '/chat' },
+  ...(user.value?.role === 'ADMIN' ? [{ icon: LayoutDashboard, label: '控制台', path: '/admin', matchPrefix: '/admin' }] : []),
+  { icon: Settings, label: '设置', path: '/settings', matchPrefix: '/settings' },
 ]);
+
+const isItemActive = (path: string, matchPrefix: string) => {
+  if (matchPrefix === '/') {
+    return route.path === '/';
+  }
+  return route.path === matchPrefix || route.path.startsWith(`${matchPrefix}/`);
+};
 
 const handleLogout = () => {
   logout();
@@ -51,8 +58,8 @@ const handleLogout = () => {
         v-for="item in navItems"
         :key="item.path"
         :to="item.path"
-        class="flex items-center gap-4 p-3 rounded-full transition-colors hover:bg-bg-secondary"
-        :class="{ 'font-bold': route.path === item.path, 'font-normal': route.path !== item.path }"
+        class="flex items-center gap-4 border-b-2 border-transparent p-3 transition-colors hover:bg-bg-secondary"
+        :class="{ 'border-text-primary bg-bg-secondary font-bold': isItemActive(item.path, item.matchPrefix), 'font-normal': !isItemActive(item.path, item.matchPrefix) }"
       >
         <span class="relative inline-flex">
           <component :is="item.icon" :size="26" />
@@ -90,7 +97,10 @@ const handleLogout = () => {
 
     <div v-if="isAuthenticated" class="space-y-4">
 
-      <div class="flex items-center gap-3 p-3 rounded-full hover:bg-bg-secondary cursor-pointer group relative">
+      <div
+        class="flex items-center gap-3 rounded-full p-3 hover:bg-bg-secondary cursor-pointer group relative"
+        @click="router.push(user ? `/profile/${user.username}` : '/login')"
+      >
         <img :src="user?.avatar" :alt="user?.nickname" class="w-10 h-10 rounded-full object-cover" />
         <div class="hidden lg:block flex-1 min-w-0">
           <p class="font-bold truncate">{{ user?.nickname }}</p>

@@ -67,8 +67,32 @@ public interface ChatMapper {
     MessageEntity findLastMessage(@Param("conversationId") Long conversationId);
 
     @Insert("""
-        INSERT INTO messages (conversation_id, sender_id, content, created_at, read_at, recalled, recalled_at)
-        VALUES (#{conversationId}, #{senderId}, #{content}, #{createdAt}, #{readAt}, #{recalled}, #{recalledAt})
+        INSERT INTO messages (
+            conversation_id,
+            sender_id,
+            content,
+            message_type,
+            file_url,
+            file_name,
+            mime_type,
+            created_at,
+            read_at,
+            recalled,
+            recalled_at
+        )
+        VALUES (
+            #{conversationId},
+            #{senderId},
+            #{content},
+            #{messageType},
+            #{fileUrl},
+            #{fileName},
+            #{mimeType},
+            #{createdAt},
+            #{readAt},
+            #{recalled},
+            #{recalledAt}
+        )
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     void insertMessage(MessageEntity entity);

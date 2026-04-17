@@ -46,7 +46,12 @@ const handleSearch = () => {
 };
 
 const handleShowMoreTopics = () => {
-  router.push('/search');
+  router.push('/topics');
+};
+
+const openTopic = async (topicName: string) => {
+  await router.push(`/topics?tag=${encodeURIComponent(topicName)}`);
+  requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
 };
 
 const handleFollow = async (candidate: User) => {
@@ -83,16 +88,17 @@ const handleFollow = async (candidate: User) => {
     <!-- Trending Topics -->
     <div class="bg-bg-secondary rounded-2xl overflow-hidden">
       <h2 class="text-xl font-bold p-4">热门话题</h2>
-      <div 
+      <button
         v-for="topic in trending" 
         :key="topic.id"
-        @click="router.push(`/search?q=%23${topic.name}`)"
-        class="px-4 py-3 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-colors"
+        type="button"
+        @click="openTopic(topic.name)"
+        class="block w-full px-4 py-3 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
       >
         <p class="text-text-secondary text-xs">正在热议</p>
         <p class="font-bold">#{{ topic.name }}</p>
         <p class="text-text-secondary text-xs">{{ topic.postCount }} 帖子</p>
-      </div>
+      </button>
       <button
         type="button"
         @click="handleShowMoreTopics"
@@ -105,16 +111,18 @@ const handleFollow = async (candidate: User) => {
     <!-- Recommended Users -->
     <div class="bg-bg-secondary rounded-2xl overflow-hidden">
       <h2 class="text-xl font-bold p-4">推荐关注</h2>
-      <div 
+      <article 
         v-for="u in recommended" 
         :key="u.id"
-        class="px-4 py-3 flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-colors"
+        class="px-4 py-3 flex items-center gap-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
       >
-        <img :src="u.avatar" :alt="u.nickname" class="w-10 h-10 rounded-full object-cover" />
-        <div class="flex-1 min-w-0">
-          <p class="font-bold truncate">{{ u.nickname }}</p>
-          <p class="text-text-secondary text-sm truncate">@{{ u.username }}</p>
-        </div>
+        <router-link :to="`/profile/${u.username}`" class="flex min-w-0 flex-1 items-center gap-3 rounded-2xl">
+          <img :src="u.avatar" :alt="u.nickname" class="w-10 h-10 rounded-full object-cover" />
+          <div class="min-w-0">
+            <p class="font-bold truncate hover:underline">{{ u.nickname }}</p>
+            <p class="text-text-secondary text-sm truncate">@{{ u.username }}</p>
+          </div>
+        </router-link>
         <button
           type="button"
           @click.stop="handleFollow(u)"
@@ -122,7 +130,7 @@ const handleFollow = async (candidate: User) => {
         >
           {{ u.isFollowing ? '已关注' : '关注' }}
         </button>
-      </div>
+      </article>
       <button
         type="button"
         @click="router.push('/search')"

@@ -58,6 +58,10 @@ INSERT INTO comments (post_id, author_id, content, likes_count, created_at) VALU
   (13, 6, '会议室是真的难抢。', 0, DATE_SUB(NOW(), INTERVAL 118 HOUR)),
   (14, 4, '配色很舒服，字也挺清楚。', 1, DATE_SUB(NOW(), INTERVAL 119 HOUR));
 
+INSERT INTO comment_images (comment_id, image_url) VALUES
+  (6, 'https://picsum.photos/seed/comment-sunset/480/320'),
+  (10, 'https://picsum.photos/seed/comment-library/480/320');
+
 INSERT INTO follows (follower_id, following_id, created_at) VALUES
   (1, 2, DATE_SUB(NOW(), INTERVAL 20 DAY)),
   (1, 3, DATE_SUB(NOW(), INTERVAL 19 DAY)),
@@ -215,7 +219,7 @@ INSERT INTO reports (post_id, reporter_id, category, details, status, resolved_b
 INSERT INTO notifications (type, recipient_id, actor_id, post_id, message, action_label, action_url, is_read, created_at) VALUES
   ('like', 1, 2, 1, NULL, NULL, NULL, FALSE, DATE_SUB(NOW(), INTERVAL 50 MINUTE)),
   ('comment', 1, 3, 1, NULL, NULL, NULL, FALSE, DATE_SUB(NOW(), INTERVAL 44 MINUTE)),
-  ('follow', 1, 4, NULL, NULL, NULL, NULL, TRUE, DATE_SUB(NOW(), INTERVAL 16 DAY)),
+  ('follow', 1, 4, NULL, NULL, NULL, NULL, FALSE, DATE_SUB(NOW(), INTERVAL 16 DAY)),
   ('mention', 12, 3, 3, NULL, NULL, NULL, FALSE, DATE_SUB(NOW(), INTERVAL 19 HOUR)),
   ('system', 7, 1, 17, '你的帖子已被管理员撤回。原因：活动时间已更新，请重新确认后再发布。', '重新编辑', '/compose?edit=17', FALSE, DATE_SUB(NOW(), INTERVAL 6 DAY)),
   ('system', 9, 1, 18, '你的帖子已被管理员删除。原因：涉及不当传播内容。', NULL, NULL, TRUE, DATE_SUB(NOW(), INTERVAL 7 DAY));

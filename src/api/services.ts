@@ -1,4 +1,4 @@
-import type { AdminOverview, AdminReport, AiConversation, AiMessage, AiModelId, Comment, Conversation, ConversationDetail, ConversationMessage, Notification, Post, PostViewRecord, RelationshipTab, ReportCategory, Topic, User } from '../types';
+import type { AdminOverview, AdminReport, AiConversation, AiMessage, AiModelId, Comment, Conversation, ConversationDetail, ConversationMessage, ConversationMessageType, Notification, Post, PostViewRecord, RelationshipTab, ReportCategory, Topic, User } from '../types';
 import { API_ORIGIN, apiRequest, getAuthToken, normalizeAssetUrl, setAuthToken } from './http';
 
 type ApiUser = {
@@ -41,6 +41,7 @@ type ApiComment = {
   authorId: string;
   author: ApiUser;
   content: string;
+  images?: string[];
   createdAt: string;
   likesCount: number;
   isLiked?: boolean;
@@ -85,10 +86,20 @@ type ApiConversationMessage = {
   senderId: string;
   sender: ApiUser;
   content: string;
+  messageType: ConversationMessageType;
+  fileUrl?: string | null;
+  fileName?: string | null;
+  mimeType?: string | null;
   createdAt: string;
   read: boolean;
   recalled: boolean;
   canRecall: boolean;
+};
+
+type ApiUploadResponse = {
+  url: string;
+  fileName?: string | null;
+  mimeType?: string | null;
 };
 
 type ApiConversationDetail = ApiConversation & {
@@ -261,6 +272,7 @@ const mapPost = (post: ApiPost): Post => {
 const mapComment = (comment: ApiComment): Comment => ({
   ...comment,
   author: mapUser(comment.author),
+  images: comment.images?.map((image) => normalizeAssetUrl(image)) || [],
 });
 
 const mapPostViewRecord = (record: ApiPostViewRecord): PostViewRecord => ({
@@ -271,6 +283,9 @@ const mapPostViewRecord = (record: ApiPostViewRecord): PostViewRecord => ({
 const mapConversationMessage = (message: ApiConversationMessage): ConversationMessage => ({
   ...message,
   sender: mapUser(message.sender),
+  fileUrl: message.fileUrl ? normalizeAssetUrl(message.fileUrl) : undefined,
+  fileName: message.fileName || undefined,
+  mimeType: message.mimeType || undefined,
 });
 
 const mapConversation = (conversation: ApiConversation): Conversation => ({
@@ -357,7 +372,7 @@ export const uploadService = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await apiRequest<{ url: string }>(
+    const response = await apiRequest<ApiUploadResponse>(
       '/uploads/images',
       {
         method: 'POST',
@@ -367,6 +382,27 @@ export const uploadService = {
     );
 
     return normalizeAssetUrl(response.url);
+  },
+
+  async uploadChatAttachment(file: File): Promise<{ fileUrl: string; fileName: string; mimeType: string; messageType: ConversationMessageType }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await apiRequest<ApiUploadResponse>(
+      '/uploads/files',
+      {
+        method: 'POST',
+        body: formData,
+      },
+      'required',
+    );
+
+    return {
+      fileUrl: normalizeAssetUrl(response.url),
+      fileName: response.fileName || file.name,
+      mimeType: response.mimeType || file.type || 'application/octet-stream',
+      messageType: file.type.startsWith('image/') ? 'IMAGE' : 'FILE',
+    };
   },
 };
 
@@ -561,12 +597,13 @@ export const commentService = {
     return sortByCreatedAt(comments.map(mapComment));
   },
 
-  async addComment(postId: string, content: string): Promise<Comment> {
+  async addComment(postId: string, content: string, files: File[] = []): Promise<Comment> {
+    const imageUrls = await Promise.all(files.map((file) => uploadService.uploadImage(file)));
     const comment = await apiRequest<ApiComment>(
       `/posts/${postId}/comments`,
       {
         method: 'POST',
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, imageUrls }),
       },
       'required',
     );
@@ -690,6 +727,11 @@ export const notificationService = {
   async getUnreadCount(): Promise<number> {
     const items = await this.getNotifications();
     return items.filter((item) => !item.read).length;
+  },
+
+  async getUnreadFollowNotifications(): Promise<Notification[]> {
+    const items = await this.getNotifications();
+    return items.filter((item) => item.type === 'follow' && !item.read);
   },
 };
 
@@ -902,7 +944,22 @@ export const chatService = {
       `/chat/conversations/${conversationId}/messages`,
       {
         method: 'POST',
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, messageType: 'TEXT' }),
+      },
+      'required',
+    );
+    return mapConversationMessage(message);
+  },
+
+  async sendAttachment(
+    conversationId: string,
+    payload: { fileUrl: string; fileName: string; mimeType: string; messageType: 'IMAGE' | 'FILE'; content?: string },
+  ): Promise<ConversationMessage> {
+    const message = await apiRequest<ApiConversationMessage>(
+      `/chat/conversations/${conversationId}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
       },
       'required',
     );

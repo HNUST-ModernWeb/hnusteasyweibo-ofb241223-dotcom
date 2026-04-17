@@ -7,6 +7,10 @@ public class MessageEntity {
     private Long conversationId;
     private Long senderId;
     private String content;
+    private String messageType;
+    private String fileUrl;
+    private String fileName;
+    private String mimeType;
     private LocalDateTime createdAt;
     private LocalDateTime readAt;
     private Boolean recalled;
@@ -42,6 +46,38 @@ public class MessageEntity {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getMessageType() {
+        return messageType;
+    }
+
+    public void setMessageType(String messageType) {
+        this.messageType = messageType;
+    }
+
+    public String getFileUrl() {
+        return fileUrl;
+    }
+
+    public void setFileUrl(String fileUrl) {
+        this.fileUrl = fileUrl;
+    }
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public String getMimeType() {
+        return mimeType;
+    }
+
+    public void setMimeType(String mimeType) {
+        this.mimeType = mimeType;
     }
 
     public LocalDateTime getCreatedAt() {

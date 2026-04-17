@@ -119,9 +119,15 @@ const formatConversationTime = (value: string) => {
 
   <div
     v-else-if="isAuthenticated"
-    class="fixed bottom-4 right-4 left-4 sm:left-auto z-40 h-[min(640px,calc(100vh-1.5rem))] sm:h-[640px] w-auto sm:w-[430px] rounded-[32px] border border-black/10 bg-white shadow-[0_24px_80px_rgba(0,0,0,0.18)]"
+    class="fixed inset-0 z-40"
+    @click="closePanel"
   >
-    <div class="relative flex h-full flex-col overflow-hidden rounded-[32px]">
+    <div class="absolute inset-0 bg-black/10 backdrop-blur-[1px]" />
+    <div
+      class="absolute bottom-4 right-4 left-4 sm:left-auto h-[min(640px,calc(100vh-1.5rem))] sm:h-[640px] w-auto sm:w-[430px] rounded-[32px] border border-black/10 bg-white shadow-[0_24px_80px_rgba(0,0,0,0.18)]"
+      @click.stop
+    >
+      <div class="relative flex h-full flex-col overflow-hidden rounded-[32px]">
       <aside
         v-if="historyOpen"
         class="absolute inset-y-0 left-0 z-10 w-[270px] border-r border-black/10 bg-white/98 p-4 backdrop-blur"
@@ -305,6 +311,7 @@ const formatConversationTime = (value: string) => {
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   </div>

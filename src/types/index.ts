@@ -38,6 +38,7 @@ export interface Comment {
   authorId: string;
   author: User;
   content: string;
+  images?: string[];
   createdAt: string;
   likesCount: number;
   isLiked?: boolean;
@@ -69,6 +70,8 @@ export interface Topic {
 
 export type RelationshipTab = 'following' | 'followers' | 'mutual';
 
+export type ConversationMessageType = 'TEXT' | 'IMAGE' | 'FILE';
+
 export interface Conversation {
   id: string;
   targetUser: User;
@@ -87,6 +90,10 @@ export interface ConversationMessage {
   senderId: string;
   sender: User;
   content: string;
+  messageType: ConversationMessageType;
+  fileUrl?: string;
+  fileName?: string;
+  mimeType?: string;
   createdAt: string;
   read: boolean;
   recalled: boolean;

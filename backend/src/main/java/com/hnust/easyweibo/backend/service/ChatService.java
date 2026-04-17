@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,9 @@ public class ChatService {
 
     private static final Duration RECALL_WINDOW = Duration.ofMinutes(2);
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+    private static final String TYPE_TEXT = "TEXT";
+    private static final String TYPE_IMAGE = "IMAGE";
+    private static final String TYPE_FILE = "FILE";
 
     private final ChatMapper chatMapper;
     private final UserService userService;
@@ -79,10 +83,33 @@ public class ChatService {
             throw new ApiException(HttpStatus.FORBIDDEN, permission.restrictionReason());
         }
 
+        String messageType = normalizeMessageType(request.messageType());
+        String trimmedContent = request.content() == null ? "" : request.content().trim();
+
+        if (TYPE_TEXT.equals(messageType)) {
+            if (trimmedContent.isBlank()) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "消息内容不能为空");
+            }
+            if (trimmedContent.length() > 2000) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "消息内容不能超过 2000 个字符");
+            }
+        } else {
+            if ((request.fileUrl() == null || request.fileUrl().isBlank()) || (request.fileName() == null || request.fileName().isBlank())) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "附件消息缺少文件信息");
+            }
+            if (!trimmedContent.isBlank() && trimmedContent.length() > 2000) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, "消息内容不能超过 2000 个字符");
+            }
+        }
+
         MessageEntity message = new MessageEntity();
         message.setConversationId(conversationId);
         message.setSenderId(currentUserId);
-        message.setContent(request.content().trim());
+        message.setContent(trimmedContent.isBlank() ? null : trimmedContent);
+        message.setMessageType(messageType);
+        message.setFileUrl(blankToNull(request.fileUrl()));
+        message.setFileName(blankToNull(request.fileName()));
+        message.setMimeType(blankToNull(request.mimeType()));
         message.setCreatedAt(LocalDateTime.now());
         message.setReadAt(null);
         message.setRecalled(false);
@@ -191,7 +218,11 @@ public class ChatService {
             String.valueOf(message.getConversationId()),
             String.valueOf(message.getSenderId()),
             userService.getById(message.getSenderId(), currentUserId),
-            recalled ? "撤回了一条消息" : message.getContent(),
+            recalled ? "撤回了一条消息" : (message.getContent() == null ? "" : message.getContent()),
+            message.getMessageType() == null ? TYPE_TEXT : message.getMessageType(),
+            recalled ? null : message.getFileUrl(),
+            recalled ? null : message.getFileName(),
+            recalled ? null : message.getMimeType(),
             message.getCreatedAt().format(TIME_FORMATTER),
             message.getReadAt() != null,
             recalled,
@@ -205,8 +236,29 @@ public class ChatService {
         if (Boolean.TRUE.equals(message.getRecalled())) {
             return "撤回了一条消息";
         }
+        if (TYPE_IMAGE.equals(message.getMessageType())) {
+            return "[图片]";
+        }
+        if (TYPE_FILE.equals(message.getMessageType())) {
+            return message.getFileName() == null ? "[文件]" : "[文件] " + message.getFileName();
+        }
         String content = message.getContent() == null ? "" : message.getContent().trim();
         return content.length() <= 36 ? content : content.substring(0, 36) + "...";
+    }
+
+    private String normalizeMessageType(String value) {
+        if (value == null || value.isBlank()) {
+            return TYPE_TEXT;
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case TYPE_TEXT, TYPE_IMAGE, TYPE_FILE -> normalized;
+            default -> throw new ApiException(HttpStatus.BAD_REQUEST, "不支持的消息类型");
+        };
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private ChatPermission getPermission(ConversationEntity conversation, Long currentUserId, Long targetUserId) {

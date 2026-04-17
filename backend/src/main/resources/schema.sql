@@ -11,6 +11,7 @@ DROP TABLE IF EXISTS bookmarks;
 DROP TABLE IF EXISTS reposts;
 DROP TABLE IF EXISTS post_likes;
 DROP TABLE IF EXISTS follows;
+DROP TABLE IF EXISTS comment_images;
 DROP TABLE IF EXISTS comments;
 DROP TABLE IF EXISTS post_images;
 DROP TABLE IF EXISTS posts;
@@ -59,6 +60,13 @@ CREATE TABLE comments (
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_comments_post FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
     CONSTRAINT fk_comments_author FOREIGN KEY (author_id) REFERENCES users(id)
+);
+
+CREATE TABLE comment_images (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    comment_id BIGINT NOT NULL,
+    image_url VARCHAR(255) NOT NULL,
+    CONSTRAINT fk_comment_images_comment FOREIGN KEY (comment_id) REFERENCES comments(id) ON DELETE CASCADE
 );
 
 CREATE TABLE follows (
@@ -161,7 +169,11 @@ CREATE TABLE messages (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     conversation_id BIGINT NOT NULL,
     sender_id BIGINT NOT NULL,
-    content TEXT NOT NULL,
+    content TEXT,
+    message_type VARCHAR(16) NOT NULL DEFAULT 'TEXT',
+    file_url VARCHAR(255),
+    file_name VARCHAR(255),
+    mime_type VARCHAR(128),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     read_at DATETIME,
     recalled BOOLEAN NOT NULL DEFAULT FALSE,

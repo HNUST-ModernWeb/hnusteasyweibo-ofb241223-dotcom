@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { chatService, userService, postService, commentService, uploadService } from '../api/services';
 import { User, Post, Comment } from '../types';
@@ -10,7 +10,7 @@ import { useToast } from '../composables/useToast';
 
 const route = useRoute();
 const router = useRouter();
-const username = route.params.username as string;
+const username = computed(() => String(route.params.username || ''));
 const profileUser = ref<User | null>(null);
 const posts = ref<Post[]>([]);
 const likedPosts = ref<Post[]>([]);
@@ -19,7 +19,7 @@ const replies = ref<Comment[]>([]);
 const loading = ref(true);
 const { user: currentUser, isAuthenticated, setCurrentUser } = useAuth();
 const { showToast } = useToast();
-const activeTab = ref<'帖子' | '回复' | '媒体' | '喜欢' | '转发'>('帖子');
+const activeTab = ref<'帖子' | '回复' | '喜欢' | '转发'>('帖子');
 const isEditModalOpen = ref(false);
 const savingProfile = ref(false);
 const editNickname = ref('');
@@ -34,7 +34,7 @@ const coverPreviewUrl = ref('');
 const loadProfile = async () => {
   loading.value = true;
   try {
-    const u = await userService.getUserByUsername(username);
+    const u = await userService.getUserByUsername(username.value);
     profileUser.value = u || null;
     if (u) {
       const [authored, liked, reposted, authoredReplies] = await Promise.all([
@@ -67,10 +67,16 @@ const loadProfile = async () => {
 
 onMounted(loadProfile);
 
+watch(
+  () => route.params.username,
+  async () => {
+    activeTab.value = '帖子';
+    await loadProfile();
+  },
+);
+
 const filteredPosts = computed(() => {
   switch (activeTab.value) {
-    case '媒体':
-      return posts.value.filter((post) => post.images && post.images.length > 0);
     case '喜欢':
       return likedPosts.value;
     case '转发':
@@ -84,8 +90,6 @@ const filteredReplies = computed(() => (activeTab.value === '回复' ? replies.v
 
 const emptyStateText = computed(() => {
   switch (activeTab.value) {
-    case '媒体':
-      return '这个用户还没有发布带图片的内容。';
     case '喜欢':
       return '这个用户还没有点赞任何帖子。';
     case '转发':
@@ -118,7 +122,7 @@ const handleChat = async () => {
   }
   try {
     const conversation = await chatService.createConversation(profileUser.value.id);
-    await router.push(`/chat?conversation=${conversation.id}`);
+    await router.push(`/chat/${conversation.id}`);
   } catch (error) {
     showToast(error instanceof Error ? error.message : '创建聊天失败，请稍后重试', 'error');
   }
@@ -304,14 +308,14 @@ const handlePreviewUpload = (event: Event, target: 'avatar' | 'cover') => {
       </div>
     </div>
 
-    <div class="mt-4 border-b border-border flex">
+      <div class="mt-4 flex border-b border-border">
       <button
-        v-for="tab in ['帖子', '回复', '媒体', '喜欢', '转发']"
+        v-for="tab in ['帖子', '回复', '喜欢', '转发']"
         :key="tab"
         type="button"
         @click="activeTab = tab as typeof activeTab.value"
-        class="flex-1 py-4 font-bold text-text-secondary hover:bg-bg-secondary transition-colors"
-        :class="{ 'text-text-primary border-b-2 border-brand': activeTab === tab }"
+        class="flex-1 border-b-2 border-transparent py-4 font-bold text-text-secondary transition-colors hover:bg-bg-secondary/50"
+        :class="{ 'border-text-primary text-text-primary': activeTab === tab }"
       >
         {{ tab }}
       </button>
@@ -327,6 +331,16 @@ const handlePreviewUpload = (event: Event, target: 'avatar' | 'cover') => {
         >
           <p class="text-sm text-text-secondary mb-2">回复了帖子 #{{ reply.postId }}</p>
           <p class="text-[15px] leading-6">{{ reply.content }}</p>
+          <div v-if="reply.images?.length" class="mt-3 flex flex-wrap gap-2">
+            <img
+              v-for="(image, index) in reply.images"
+              :key="`${reply.id}-${index}`"
+              :src="image"
+              alt="Reply image"
+              loading="lazy"
+              class="h-20 w-20 rounded-2xl object-cover"
+            />
+          </div>
           <p class="text-xs text-text-secondary mt-3">{{ new Date(reply.createdAt).toLocaleString('zh-CN') }}</p>
         </div>
       </template>
