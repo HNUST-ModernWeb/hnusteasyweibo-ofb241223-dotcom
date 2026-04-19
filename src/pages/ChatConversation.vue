@@ -37,16 +37,55 @@ const togglingBlock = ref(false);
 const emojiOpen = ref(false);
 const composing = ref('');
 const messagesContainer = ref<HTMLElement | null>(null);
+const bottomAnchor = ref<HTMLElement | null>(null);
 const attachmentInput = ref<HTMLInputElement | null>(null);
 const previewImages = ref<string[]>([]);
 const previewIndex = ref(0);
+const shouldStickToBottom = ref(true);
 
 const emojiPalette = ['😀', '😂', '🥳', '👍', '👏', '🔥', '✨', '🎉', '❤️', '🙏', '🤝', '📚', '💻', '😄', '😮', '🥲', '😎', '👀'];
 const attachmentAccept = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.zip,.txt';
 
-const scrollToBottom = async (behavior: ScrollBehavior = 'smooth') => {
+const waitForLayout = async () => {
   await nextTick();
-  messagesContainer.value?.scrollTo({ top: messagesContainer.value.scrollHeight, behavior });
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+};
+
+const scrollToBottom = async (behavior: ScrollBehavior = 'smooth') => {
+  await waitForLayout();
+  bottomAnchor.value?.scrollIntoView({ behavior, block: 'end' });
+  const element = messagesContainer.value;
+  if (element) {
+    element.scrollTo({ top: element.scrollHeight, behavior });
+    if (behavior === 'auto') {
+      element.scrollTop = element.scrollHeight;
+    }
+  }
+};
+
+type LoadDetailOptions = {
+  showLoading?: boolean;
+  preserveScroll?: boolean;
+};
+
+const syncStickToBottom = () => {
+  const element = messagesContainer.value;
+  if (!element) {
+    shouldStickToBottom.value = true;
+    return;
+  }
+  const distanceToBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+  shouldStickToBottom.value = distanceToBottom < 96;
+};
+
+const handleMessagesScroll = () => {
+  syncStickToBottom();
+};
+
+const handleMediaLoaded = async () => {
+  if (shouldStickToBottom.value) {
+    await scrollToBottom('auto');
+  }
 };
 
 const upsertMessage = async (incoming: ConversationMessage) => {
@@ -67,28 +106,44 @@ const upsertMessage = async (incoming: ConversationMessage) => {
     lastMessageAt: incoming.createdAt,
     messages: current,
   };
-  await scrollToBottom();
+  await scrollToBottom('auto');
 };
 
-const loadDetail = async () => {
+const loadDetail = async (options: LoadDetailOptions = {}) => {
   if (!conversationId.value) {
     detail.value = null;
     return;
   }
 
-  loading.value = true;
+  const showLoading = options.showLoading ?? true;
+  const preserveScroll = options.preserveScroll ?? false;
+  const previousScrollTop = messagesContainer.value?.scrollTop ?? 0;
+
+  if (showLoading) {
+    loading.value = true;
+  }
   try {
     detail.value = await chatService.getConversation(conversationId.value);
     if (detail.value.unreadCount > 0) {
       await chatService.markConversationRead(conversationId.value);
       detail.value = await chatService.getConversation(conversationId.value);
     }
-    await scrollToBottom('auto');
+    if (showLoading || shouldStickToBottom.value) {
+      await scrollToBottom('auto');
+    } else if (preserveScroll && messagesContainer.value) {
+      await waitForLayout();
+      messagesContainer.value.scrollTop = previousScrollTop;
+    }
+    syncStickToBottom();
   } catch (error) {
-    detail.value = null;
-    showToast(error instanceof Error ? error.message : '加载会话失败，请稍后重试', 'error');
+    if (showLoading) {
+      detail.value = null;
+      showToast(error instanceof Error ? error.message : '加载会话失败，请稍后重试', 'error');
+    }
   } finally {
-    loading.value = false;
+    if (showLoading) {
+      loading.value = false;
+    }
   }
 };
 
@@ -107,11 +162,13 @@ useChatSocket(conversationId, {
     await upsertMessage(mapConversationMessage(message as ApiConversationMessage));
   },
   onConversationInvalidated: async () => {
-    await loadDetail();
+    await loadDetail({ showLoading: false, preserveScroll: true });
   },
 });
 
-onMounted(loadDetail);
+onMounted(() => {
+  void loadDetail();
+});
 
 watch(
   () => route.params.id,
@@ -126,6 +183,7 @@ const handleSend = async () => {
     return;
   }
 
+  shouldStickToBottom.value = true;
   sending.value = true;
   try {
     const message = await chatService.sendMessage(detail.value.id, composing.value.trim());
@@ -152,6 +210,7 @@ const handleAttachmentSelected = async (event: Event) => {
     return;
   }
 
+  shouldStickToBottom.value = true;
   uploadingAttachment.value = true;
   try {
     const uploaded = await uploadService.uploadChatAttachment(file);
@@ -264,24 +323,42 @@ const canSend = computed(() => detail.value?.canSend ?? false);
     </div>
 
     <template v-else-if="detail">
-      <div ref="messagesContainer" class="h-[calc(100vh-250px)] overflow-y-auto bg-bg-secondary/30 px-4 py-5">
+      <div ref="messagesContainer" class="h-[calc(100vh-250px)] overflow-y-auto bg-bg-secondary/30 px-4 py-5 pb-8" @scroll="handleMessagesScroll">
         <div class="mx-auto max-w-4xl space-y-6">
           <article
             v-for="message in detail.messages"
             :key="message.id"
             class="space-y-2"
           >
-            <div class="flex items-end" :class="message.senderId === user?.id ? 'justify-end' : 'justify-start'">
-              <div class="flex max-w-[78%] items-end gap-3" :class="message.senderId === user?.id ? 'flex-row-reverse' : ''">
+            <div class="flex items-start" :class="message.senderId === user?.id ? 'justify-end' : 'justify-start'">
+              <div class="flex max-w-[78%] items-start gap-3" :class="message.senderId === user?.id ? 'flex-row-reverse' : ''">
                 <img :src="message.sender.avatar" :alt="message.sender.nickname" class="h-10 w-10 rounded-full object-cover" />
                 <div class="flex max-w-full flex-col" :class="message.senderId === user?.id ? 'items-end' : 'items-start'">
+                  <div class="mb-2 flex items-center gap-3 px-1 text-xs text-text-secondary" :class="message.senderId === user?.id ? 'justify-end' : ''">
+                    <span>{{ formatMessageTime(message.createdAt) }}</span>
+                    <button
+                      v-if="message.canRecall"
+                      type="button"
+                      class="inline-flex items-center gap-1 hover:text-text-primary"
+                      :disabled="recallingId === message.id"
+                      @click="recallMessage(message.id)"
+                    >
+                      <Undo2 :size="12" />
+                      {{ recallingId === message.id ? '撤回中' : '撤回' }}
+                    </button>
+                    <span v-else-if="message.recalled" class="inline-flex items-center gap-1">
+                      <Undo2 :size="12" />
+                      已撤回
+                    </span>
+                  </div>
+
                   <div
                     class="inline-block max-w-full rounded-[24px] px-4 py-3 shadow-sm"
                     :class="message.senderId === user?.id ? 'bg-text-primary text-bg-primary' : message.recalled ? 'border border-border bg-bg-primary text-text-secondary' : 'border border-border bg-bg-primary text-text-primary'"
                   >
                     <template v-if="message.messageType === 'IMAGE' && message.fileUrl && !message.recalled">
                       <button type="button" class="block overflow-hidden rounded-2xl" @click="openImagePreview(message.fileUrl)">
-                        <img :src="message.fileUrl" :alt="message.fileName || '聊天图片'" class="max-h-72 rounded-2xl object-cover transition hover:scale-[1.01]" />
+                        <img :src="message.fileUrl" :alt="message.fileName || '聊天图片'" class="max-h-72 rounded-2xl object-cover transition hover:scale-[1.01]" @load="handleMediaLoaded" />
                       </button>
                       <p v-if="message.content" class="mt-3 whitespace-pre-wrap break-words text-[15px] leading-7">{{ message.content }}</p>
                     </template>
@@ -300,28 +377,11 @@ const canSend = computed(() => detail.value?.canSend ?? false);
                       <p class="whitespace-pre-wrap break-words text-[15px] leading-7">{{ message.content }}</p>
                     </template>
                   </div>
-
-                  <div class="mt-2 flex items-center gap-3 px-1 text-xs text-text-secondary" :class="message.senderId === user?.id ? 'justify-end' : ''">
-                    <span>{{ formatMessageTime(message.createdAt) }}</span>
-                    <button
-                      v-if="message.canRecall"
-                      type="button"
-                      class="inline-flex items-center gap-1 hover:text-text-primary"
-                      :disabled="recallingId === message.id"
-                      @click="recallMessage(message.id)"
-                    >
-                      <Undo2 :size="12" />
-                      {{ recallingId === message.id ? '撤回中' : '撤回' }}
-                    </button>
-                    <span v-else-if="message.recalled" class="inline-flex items-center gap-1">
-                      <Undo2 :size="12" />
-                      已撤回
-                    </span>
-                  </div>
                 </div>
               </div>
             </div>
           </article>
+          <div ref="bottomAnchor" class="h-px w-full" />
         </div>
       </div>
 

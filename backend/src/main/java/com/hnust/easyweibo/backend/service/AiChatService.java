@@ -60,6 +60,14 @@ public class AiChatService {
         return toDetailResponse(conversation, messageMapper.findByConversationId(id));
     }
 
+    public void deleteConversation(Long id, Long userId) {
+        requireConversation(id, userId);
+        int deleted = conversationMapper.deleteByIdAndUserId(id, userId);
+        if (deleted == 0) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "会话不存在");
+        }
+    }
+
     public SseEmitter streamMessage(Long conversationId, Long userId, String rawMessage, String requestedModel) {
         AiConversationEntity conversation = requireConversation(conversationId, userId);
         String message = rawMessage.trim();

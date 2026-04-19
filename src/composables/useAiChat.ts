@@ -116,6 +116,19 @@ export function useAiChat() {
     }
   };
 
+  const deleteConversation = async (conversationId: string) => {
+    await aiService.deleteConversation(conversationId);
+    conversations.value = conversations.value.filter((conversation) => conversation.id !== conversationId);
+
+    if (currentConversationId.value === conversationId) {
+      currentConversationId.value = null;
+      messages.value = [];
+      selectedModel.value = DEFAULT_AI_MODEL;
+      lastError.value = '';
+      draft.value = '';
+    }
+  };
+
   const sendMessage = async (input?: string, model: AiModelId = selectedModel.value) => {
     const content = (input ?? draft.value).trim();
     if (!content || sending.value) {
@@ -240,6 +253,7 @@ export function useAiChat() {
     toggleHistory,
     selectConversation,
     startNewConversation,
+    deleteConversation,
     sendMessage,
     retryLatestAssistant,
     clearLastError,

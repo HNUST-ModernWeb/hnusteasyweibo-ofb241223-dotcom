@@ -888,6 +888,10 @@ export const aiService = {
     return apiRequest<ApiAiConversationDetail>(`/ai/conversations/${id}`, { method: 'GET' }, 'required');
   },
 
+  async deleteConversation(id: string): Promise<void> {
+    await apiRequest<{ message: string }>(`/ai/conversations/${id}`, { method: 'DELETE' }, 'required');
+  },
+
   async streamMessage(
     id: string,
     message: string,

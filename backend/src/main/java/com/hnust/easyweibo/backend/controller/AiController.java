@@ -5,6 +5,7 @@ import java.util.List;
 import jakarta.validation.Valid;
 
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -51,6 +52,16 @@ public class AiController {
     ) {
         Long currentUserId = authService.requireUserId(authorization);
         return aiChatService.getConversation(id, currentUserId);
+    }
+
+    @DeleteMapping("/conversations/{id}")
+    public java.util.Map<String, String> deleteConversation(
+        @PathVariable("id") Long id,
+        @RequestHeader("Authorization") String authorization
+    ) {
+        Long currentUserId = authService.requireUserId(authorization);
+        aiChatService.deleteConversation(id, currentUserId);
+        return java.util.Map.of("message", "会话已删除");
     }
 
     @PostMapping(value = "/conversations/{id}/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

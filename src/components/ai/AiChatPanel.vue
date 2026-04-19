@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import DOMPurify from 'dompurify';
 import {
   ChevronDown,
   Copy,
@@ -12,7 +13,9 @@ import {
   Sparkles,
   ThumbsDown,
   ThumbsUp,
+  X,
 } from 'lucide-vue-next';
+import { marked } from 'marked';
 import { useAuth } from '../../composables/useAuth';
 import { AI_MODELS, useAiChat } from '../../composables/useAiChat';
 import { useToast } from '../../composables/useToast';
@@ -21,6 +24,7 @@ const router = useRouter();
 const { isAuthenticated } = useAuth();
 const { showToast } = useToast();
 const messagesContainer = ref<HTMLElement | null>(null);
+const shouldStickToBottom = ref(true);
 
 const {
   isOpen,
@@ -41,6 +45,7 @@ const {
   toggleHistory,
   selectConversation,
   startNewConversation,
+  deleteConversation,
   sendMessage,
   retryLatestAssistant,
   clearLastError,
@@ -51,21 +56,68 @@ const showEmptyState = computed(() => !hasMessages.value && !loadingMessages.val
 const selectedModelLabel = computed(() => AI_MODELS.find((option) => option.id === selectedModel.value)?.label ?? 'Gemini 2.5 Flash Lite');
 const selectedModelShortLabel = computed(() => AI_MODELS.find((option) => option.id === selectedModel.value)?.shortLabel ?? '2.5 Flash Lite');
 
+const markdownRenderer = new marked.Renderer();
+markdownRenderer.link = ({ href, title, tokens }) => {
+  const text = tokens.map((token) => ('raw' in token ? token.raw : '')).join('').trim() || href || '';
+  const safeHref = href || '#';
+  const titleAttr = title ? ` title="${title}"` : '';
+  return `<a href="${safeHref}" target="_blank" rel="noreferrer noopener"${titleAttr}>${text}</a>`;
+};
+
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+  renderer: markdownRenderer,
+});
+
+const renderMarkdown = (content: string) =>
+  DOMPurify.sanitize(marked.parse(content || '') as string, {
+    USE_PROFILES: { html: true },
+  });
+
+const syncStickToBottom = () => {
+  const element = messagesContainer.value;
+  if (!element) {
+    shouldStickToBottom.value = true;
+    return;
+  }
+  const distanceToBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+  shouldStickToBottom.value = distanceToBottom < 96;
+};
+
+const handleMessagesScroll = () => {
+  syncStickToBottom();
+};
+
 const scrollToBottom = async () => {
   await nextTick();
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight;
   }
 };
 
+const messageRenderSignature = computed(() =>
+  messages.value.map((message) => `${message.id}:${message.content.length}:${message.pending ? 1 : 0}:${message.failed ? 1 : 0}`).join('|'),
+);
+
 watch(
-  () => [isOpen.value, messages.value.length, sending.value],
+  () => [isOpen.value, messageRenderSignature.value, sending.value, loadingMessages.value],
   () => {
-    if (isOpen.value) {
+    if (isOpen.value && shouldStickToBottom.value) {
       void scrollToBottom();
     }
   },
-  { deep: true },
+);
+
+watch(
+  isOpen,
+  (open) => {
+    if (open) {
+      shouldStickToBottom.value = true;
+      void scrollToBottom();
+    }
+  },
 );
 
 const handleOpen = async () => {
@@ -79,6 +131,7 @@ const handleOpen = async () => {
 
 const handleSend = async () => {
   try {
+    shouldStickToBottom.value = true;
     await sendMessage(undefined, selectedModel.value);
   } catch (error) {
     showToast(error instanceof Error ? error.message : '发送失败，请稍后重试', 'error');
@@ -96,6 +149,15 @@ const handleCopy = async (content: string) => {
 
 const handleFeedback = (type: 'up' | 'down') => {
   showToast(type === 'up' ? '已记录你的反馈' : '已记录改进建议', 'success');
+};
+
+const handleDeleteConversation = async (conversationId: string) => {
+  try {
+    await deleteConversation(conversationId);
+    showToast('历史对话已删除', 'success');
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : '删除历史对话失败，请稍后重试', 'error');
+  }
 };
 
 const formatConversationTime = (value: string) => {
@@ -149,25 +211,36 @@ const formatConversationTime = (value: string) => {
           还没有历史会话，发第一条消息后会自动保存。
         </div>
         <div v-else class="space-y-2 overflow-y-auto pr-1">
-          <button
+          <div
             v-for="conversation in conversations"
             :key="conversation.id"
             class="w-full rounded-2xl border px-3 py-3 text-left transition"
             :class="conversation.id === currentConversationId ? 'border-black bg-black text-white' : 'border-black/10 bg-white text-black hover:border-black/20 hover:bg-black/[0.03]'"
-            @click="selectConversation(conversation.id)"
           >
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="truncate text-sm font-semibold">{{ conversation.title }}</p>
-                <p class="mt-1 line-clamp-2 text-xs" :class="conversation.id === currentConversationId ? 'text-white/75' : 'text-black/55'">
-                  {{ conversation.preview || '空白会话' }}
-                </p>
-              </div>
-              <span class="shrink-0 text-[11px]" :class="conversation.id === currentConversationId ? 'text-white/75' : 'text-black/45'">
-                {{ formatConversationTime(conversation.updatedAt) }}
-              </span>
+            <div class="flex items-start gap-3">
+              <button class="min-w-0 flex-1 text-left" @click="selectConversation(conversation.id)">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold">{{ conversation.title }}</p>
+                    <p class="mt-1 line-clamp-2 text-xs" :class="conversation.id === currentConversationId ? 'text-white/75' : 'text-black/55'">
+                      {{ conversation.preview || '空白会话' }}
+                    </p>
+                  </div>
+                  <span class="shrink-0 text-[11px]" :class="conversation.id === currentConversationId ? 'text-white/75' : 'text-black/45'">
+                    {{ formatConversationTime(conversation.updatedAt) }}
+                  </span>
+                </div>
+              </button>
+              <button
+                class="shrink-0 rounded-full p-1.5 transition"
+                :class="conversation.id === currentConversationId ? 'text-white/75 hover:bg-white/10 hover:text-white' : 'text-black/45 hover:bg-black/[0.06] hover:text-black'"
+                aria-label="删除历史对话"
+                @click.stop="handleDeleteConversation(conversation.id)"
+              >
+                <X :size="14" />
+              </button>
             </div>
-          </button>
+          </div>
         </div>
       </aside>
 
@@ -196,6 +269,7 @@ const formatConversationTime = (value: string) => {
       <div
         ref="messagesContainer"
         class="relative flex-1 overflow-y-auto px-5"
+        @scroll="handleMessagesScroll"
       >
         <div v-if="loadingMessages" class="flex h-full items-center justify-center text-sm text-black/55">
           <div class="flex items-center gap-2">
@@ -225,7 +299,7 @@ const formatConversationTime = (value: string) => {
                     ? 'border border-red-200 bg-red-50 text-red-700'
                     : 'bg-transparent text-black'"
               >
-                <p class="whitespace-pre-wrap break-words">{{ message.content }}</p>
+                <div class="ai-markdown break-words" v-html="renderMarkdown(message.content)" />
               </div>
             </div>
 
@@ -316,3 +390,63 @@ const formatConversationTime = (value: string) => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.ai-markdown {
+  word-break: break-word;
+}
+
+.ai-markdown :deep(p) {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.ai-markdown :deep(p + p) {
+  margin-top: 0.75rem;
+}
+
+.ai-markdown :deep(ul),
+.ai-markdown :deep(ol) {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.ai-markdown :deep(li + li) {
+  margin-top: 0.25rem;
+}
+
+.ai-markdown :deep(code) {
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.08);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.95em;
+}
+
+.ai-markdown :deep(pre) {
+  margin: 0.9rem 0 0;
+  overflow-x: auto;
+  border-radius: 1rem;
+  background: #0f172a;
+  padding: 0.9rem 1rem;
+  color: #f8fafc;
+}
+
+.ai-markdown :deep(pre code) {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.ai-markdown :deep(a) {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ai-markdown :deep(blockquote) {
+  margin: 0.9rem 0 0;
+  border-left: 3px solid rgba(15, 23, 42, 0.18);
+  padding-left: 0.9rem;
+  color: rgba(15, 23, 42, 0.72);
+}
+</style>

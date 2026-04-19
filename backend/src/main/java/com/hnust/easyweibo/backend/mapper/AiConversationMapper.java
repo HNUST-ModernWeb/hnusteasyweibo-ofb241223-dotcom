@@ -48,4 +48,10 @@ public interface AiConversationMapper {
         WHERE id = #{id}
         """)
     void touchUpdatedAt(AiConversationEntity conversation);
+
+    @org.apache.ibatis.annotations.Delete("""
+        DELETE FROM ai_conversations
+        WHERE id = #{id} AND user_id = #{userId}
+        """)
+    int deleteByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
 }
