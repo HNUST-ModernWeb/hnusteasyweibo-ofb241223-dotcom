@@ -150,7 +150,7 @@
 ### Gemini AI 助手
 
 <p align="center">
-  <img src="./assets/readme/ai-panel.png" alt="AI 对话面板" width="100%" />
+  <img src="./assets/readme/ai-chat.gif" alt="AI 对话面板" width="100%" />
 </p>
 
 ---
